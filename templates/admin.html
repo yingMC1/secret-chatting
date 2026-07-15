@@ -1,0 +1,327 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>管理后台</title>
+    <style>
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+        body { font-family: 'Segoe UI', sans-serif; background: #1a1a2e; color: #eee; min-height: 100vh; padding: 20px; }
+        .container { max-width: 1200px; margin: 0 auto; }
+        .header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 24px; padding-bottom: 16px; border-bottom: 1px solid #333; }
+        .header h1 { color: #e94560; font-size: 24px; }
+        .header a { color: #66aaff; text-decoration: none; }
+        .stats { display: grid; grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); gap: 16px; margin-bottom: 24px; }
+        .stats .card { background: #16213e; padding: 16px 20px; border-radius: 12px; border-left: 4px solid #e94560; }
+        .stats .card .num { font-size: 28px; font-weight: bold; color: #e94560; }
+        .stats .card .label { font-size: 13px; color: #888; margin-top: 4px; }
+        .tabs { display: flex; gap: 4px; margin-bottom: 20px; background: #16213e; border-radius: 10px; padding: 4px; }
+        .tabs button { padding: 10px 24px; border: none; border-radius: 8px; background: transparent; color: #888; cursor: pointer; font-size: 14px; transition: 0.3s; }
+        .tabs button:hover { color: #eee; }
+        .tabs button.active { background: #0f3460; color: #fff; }
+        .tab-content { display: none; }
+        .tab-content.active { display: block; }
+        table { width: 100%; border-collapse: collapse; background: #16213e; border-radius: 12px; overflow: hidden; }
+        th { background: #0f3460; padding: 12px 16px; text-align: left; font-size: 13px; color: #aaa; }
+        td { padding: 10px 16px; border-bottom: 1px solid #1a2a4a; font-size: 14px; }
+        tr:hover td { background: #1a2a4a; }
+        .btn { padding: 4px 14px; border: none; border-radius: 6px; cursor: pointer; font-size: 12px; transition: 0.3s; }
+        .btn-danger { background: #e94560; color: #fff; }
+        .btn-danger:hover { background: #c73652; }
+        .btn-success { background: #0f8a5a; color: #fff; }
+        .btn-success:hover { background: #0f6b4a; }
+        .btn-warning { background: #d4a020; color: #fff; }
+        .btn-warning:hover { background: #b88918; }
+        .badge { padding: 2px 10px; border-radius: 12px; font-size: 11px; }
+        .badge-admin { background: #e94560; color: #fff; }
+        .badge-banned { background: #cc3344; color: #fff; }
+        .badge-normal { background: #2a4a6a; color: #aaa; }
+        .search-box { display: flex; gap: 10px; margin-bottom: 16px; }
+        .search-box input { flex: 1; padding: 8px 14px; border: none; border-radius: 8px; background: #1a2a4a; color: #eee; font-size: 14px; outline: none; }
+        .search-box input::placeholder { color: #6688aa; }
+        .empty { text-align: center; padding: 40px; color: #666; }
+        .toast { position: fixed; bottom: 30px; right: 30px; background: #0f3460; padding: 12px 24px; border-radius: 10px; color: #fff; font-size: 14px; box-shadow: 0 4px 16px rgba(0,0,0,0.4); display: none; z-index: 100; }
+        .toast.show { display: block; animation: fadeIn 0.3s; }
+        @keyframes fadeIn { from { opacity: 0; transform: translateY(20px); } to { opacity: 1; transform: translateY(0); } }
+        @media (max-width: 600px) { .stats { grid-template-columns: 1fr 1fr; } table { font-size: 12px; } th, td { padding: 8px 10px; } }
+    </style>
+</head>
+<body>
+<div class="container">
+    <div class="header">
+        <h1>🔧 管理后台</h1>
+        <div>
+            <a href="/">← 返回聊天室</a>
+            <span style="margin-left:16px;color:#888;">管理员：{{ username }}</span>
+        </div>
+    </div>
+
+    <div class="stats" id="stats"></div>
+
+    <div class="tabs">
+        <button class="active" data-tab="users">👥 用户管理</button>
+        <button data-tab="messages">💬 消息记录</button>
+        <button data-tab="rooms">🏠 房间管理</button>
+    </div>
+
+    <div id="tab-users" class="tab-content active">
+        <div class="search-box">
+            <input type="text" id="userSearch" placeholder="搜索用户名..." oninput="filterUsers()">
+        </div>
+        <table>
+            <thead><tr><th>ID</th><th>用户名</th><th>角色</th><th>状态</th><th>注册时间</th><th>操作</th></tr></thead>
+            <tbody id="userTableBody"></tbody>
+        </table>
+    </div>
+
+    <div id="tab-messages" class="tab-content">
+        <div class="search-box">
+            <input type="text" id="msgSearch" placeholder="搜索消息内容..." oninput="filterMessages()">
+            <select id="msgRoomFilter" onchange="filterMessages()" style="background:#1a2a4a;color:#eee;border:none;border-radius:8px;padding:8px 14px;">
+                <option value="">全部房间</option>
+            </select>
+        </div>
+        <table>
+            <thead><tr><th>ID</th><th>房间</th><th>用户</th><th>消息内容</th><th>时间</th><th>操作</th></tr></thead>
+            <tbody id="msgTableBody"></tbody>
+        </table>
+    </div>
+
+    <div id="tab-rooms" class="tab-content">
+        <div style="display:flex;gap:10px;margin-bottom:16px;">
+            <input type="text" id="newRoomName" placeholder="新房间名称" style="flex:1;padding:8px 14px;border:none;border-radius:8px;background:#1a2a4a;color:#eee;outline:none;">
+            <button class="btn btn-success" onclick="createRoom()">创建房间</button>
+        </div>
+        <table>
+            <thead><tr><th>房间名</th><th>创建者</th><th>创建时间</th><th>操作</th></tr></thead>
+            <tbody id="roomTableBody"></tbody>
+        </table>
+    </div>
+</div>
+
+<div class="toast" id="toast"></div>
+
+<script>
+    let users = [], messages = [], rooms = [];
+
+    // ===== 加载数据 =====
+    function loadAll() {
+        loadUsers();
+        loadMessages();
+        loadRooms();
+        loadStats();
+    }
+
+    function loadUsers() {
+        fetch('/api/users')
+            .then(res => res.json())
+            .then(data => { users = data; renderUsers(); });
+    }
+
+    function loadMessages() {
+        // 获取所有房间的消息（简单方案：遍历所有房间）
+        fetch('/api/rooms')
+            .then(res => res.json())
+            .then(roomsData => {
+                roomsData.forEach(r => {
+                    fetch(`/api/messages/${r.room_name}`)
+                        .then(res => res.json())
+                        .then(data => {
+                            data.forEach(m => { m.room = r.room_name; });
+                            messages = messages.concat(data);
+                            renderMessages();
+                            updateMsgRoomFilter();
+                        });
+                });
+                // 如果没有任何房间，渲染空
+                if (roomsData.length === 0) { renderMessages(); }
+            });
+    }
+
+    function loadRooms() {
+        fetch('/api/rooms')
+            .then(res => res.json())
+            .then(data => { rooms = data; renderRooms(); });
+    }
+
+    function loadStats() {
+        fetch('/api/users')
+            .then(res => res.json())
+            .then(data => {
+                const total = data.length;
+                const banned = data.filter(u => u.is_banned).length;
+                const admins = data.filter(u => u.is_admin).length;
+                document.getElementById('stats').innerHTML = `
+                    <div class="card"><div class="num">${total}</div><div class="label">总用户</div></div>
+                    <div class="card"><div class="num">${admins}</div><div class="label">管理员</div></div>
+                    <div class="card"><div class="num">${banned}</div><div class="label">已封禁</div></div>
+                    <div class="card"><div class="num">${rooms.length}</div><div class="label">聊天室</div></div>
+                `;
+            });
+    }
+
+    // ===== 渲染用户 =====
+    function renderUsers() {
+        const search = document.getElementById('userSearch').value.toLowerCase();
+        const filtered = users.filter(u => u.username.toLowerCase().includes(search));
+        const tbody = document.getElementById('userTableBody');
+        if (filtered.length === 0) {
+            tbody.innerHTML = '<tr><td colspan="6" class="empty">暂无用户</td></tr>';
+            return;
+        }
+        tbody.innerHTML = filtered.map(u => `
+            <tr>
+                <td>${u.id}</td>
+                <td>${u.username}</td>
+                <td>${u.is_admin ? '<span class="badge badge-admin">管理员</span>' : '普通用户'}</td>
+                <td>${u.is_banned ? '<span class="badge badge-banned">已封禁</span>' : '<span class="badge badge-normal">正常</span>'}</td>
+                <td>${u.created_at || '-'}</td>
+                <td>
+                    ${!u.is_admin ? (u.is_banned ? 
+                        `<button class="btn btn-success" onclick="unbanUser(${u.id})">解封</button>` :
+                        `<button class="btn btn-danger" onclick="banUser(${u.id})">封禁</button>`
+                    ) : '<span style="color:#888;">不可操作</span>'}
+                </td>
+            </tr>
+        `).join('');
+    }
+
+    function filterUsers() { renderUsers(); }
+
+    function banUser(id) {
+        if (!confirm('确认封禁该用户？')) return;
+        fetch(`/api/ban/${id}`, { method: 'POST' })
+            .then(res => res.json())
+            .then(data => {
+                if (data.success) { showToast('已封禁该用户'); loadAll(); }
+                else { showToast('操作失败：' + data.error, true); }
+            });
+    }
+
+    function unbanUser(id) {
+        fetch(`/api/unban/${id}`, { method: 'POST' })
+            .then(res => res.json())
+            .then(data => {
+                if (data.success) { showToast('已解封该用户'); loadAll(); }
+                else { showToast('操作失败', true); }
+            });
+    }
+
+    // ===== 渲染消息 =====
+    function renderMessages() {
+        const search = document.getElementById('msgSearch').value.toLowerCase();
+        const roomFilter = document.getElementById('msgRoomFilter').value;
+        const filtered = messages.filter(m => {
+            const matchContent = m.content && m.content.toLowerCase().includes(search);
+            const matchRoom = roomFilter === '' || m.room === roomFilter;
+            return matchContent && matchRoom;
+        });
+        const tbody = document.getElementById('msgTableBody');
+        if (filtered.length === 0) {
+            tbody.innerHTML = '<tr><td colspan="6" class="empty">暂无消息</td></tr>';
+            return;
+        }
+        tbody.innerHTML = filtered.slice(-100).reverse().map(m => `
+            <tr>
+                <td>${m.id}</td>
+                <td>${m.room}</td>
+                <td>${m.username}</td>
+                <td style="max-width:300px;word-wrap:break-word;">${m.content}</td>
+                <td>${m.timestamp || '-'}</td>
+                <td><button class="btn btn-danger" onclick="deleteMessage(${m.id})">删除</button></td>
+            </tr>
+        `).join('');
+    }
+
+    function filterMessages() { renderMessages(); }
+
+    function updateMsgRoomFilter() {
+        const sel = document.getElementById('msgRoomFilter');
+        const current = sel.value;
+        const rooms = [...new Set(messages.map(m => m.room))];
+        sel.innerHTML = '<option value="">全部房间</option>' + rooms.map(r => 
+            `<option value="${r}" ${r===current?'selected':''}>${r}</option>`
+        ).join('');
+    }
+
+    function deleteMessage(id) {
+        if (!confirm('确认删除该消息？')) return;
+        fetch(`/api/delete_message/${id}`, { method: 'DELETE' })
+            .then(res => res.json())
+            .then(data => {
+                if (data.success) { showToast('已删除消息'); loadMessages(); }
+                else { showToast('操作失败', true); }
+            });
+    }
+
+    // ===== 渲染房间 =====
+    function renderRooms() {
+        const tbody = document.getElementById('roomTableBody');
+        if (rooms.length === 0) {
+            tbody.innerHTML = '<tr><td colspan="4" class="empty">暂无房间</td></tr>';
+            return;
+        }
+        tbody.innerHTML = rooms.map(r => `
+            <tr>
+                <td>${r.room_name}</td>
+                <td>${r.created_by}</td>
+                <td>${r.created_at || '-'}</td>
+                <td>
+                    <button class="btn btn-danger" onclick="clearRoom('${r.room_name}')">清空消息</button>
+                </td>
+            </tr>
+        `).join('');
+    }
+
+    function createRoom() {
+        const name = document.getElementById('newRoomName').value.trim();
+        if (!name) { showToast('请输入房间名称', true); return; }
+        // 通过 socket 通知创建房间（简化：先写数据库）
+        fetch('/api/rooms')
+            .then(res => res.json())
+            .then(data => {
+                if (data.find(r => r.room_name === name)) {
+                    showToast('房间已存在', true);
+                    return;
+                }
+                // 实际创建需要后端支持，这里用系统消息方式直接插入数据库较复杂
+                // 简单做法：通过 socketio 广播系统消息，这里略，直接刷新
+                showToast('请通过后端接口创建（示例功能）');
+            });
+    }
+
+    function clearRoom(room) {
+        if (!confirm(`确认清空 "${room}" 的所有消息？`)) return;
+        fetch(`/api/clear_messages/${room}`, { method: 'DELETE' })
+            .then(res => res.json())
+            .then(data => {
+                if (data.success) { showToast('已清空该房间消息'); loadMessages(); }
+                else { showToast('操作失败', true); }
+            });
+    }
+
+    // ===== Tab 切换 =====
+    document.querySelectorAll('.tabs button').forEach(btn => {
+        btn.addEventListener('click', function() {
+            document.querySelectorAll('.tabs button').forEach(b => b.classList.remove('active'));
+            this.classList.add('active');
+            document.querySelectorAll('.tab-content').forEach(tc => tc.classList.remove('active'));
+            document.getElementById('tab-' + this.dataset.tab).classList.add('active');
+        });
+    });
+
+    // ===== Toast =====
+    function showToast(msg, isError = false) {
+        const t = document.getElementById('toast');
+        t.textContent = msg;
+        t.style.background = isError ? '#cc3344' : '#0f3460';
+        t.classList.add('show');
+        clearTimeout(t._timer);
+        t._timer = setTimeout(() => t.classList.remove('show'), 3000);
+    }
+
+    // ===== 初始化 =====
+    loadAll();
+</script>
+</body>
+</html>
