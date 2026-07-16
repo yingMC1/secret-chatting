@@ -318,36 +318,25 @@
     let currentAdmin = '';
 
     // ============================================================
-    //  Socket.IO 监听（全局播报）
+    //  安全函数：转义 HTML 特殊字符
     // ============================================================
-    socket.on('system_message', function(data) {
-        showToast('📢 ' + data.content, false);
-    });
-
-    socket.on('user_banned', function(data) {
-        showToast('🚫 用户 ' + data.username + ' 已被封禁！', false);
-        loadAll();
-    });
-
-    socket.on('user_unbanned', function(data) {
-        showToast('✅ 用户 ' + data.username + ' 已解封', false);
-        loadAll();
-    });
-
-    socket.on('message_deleted', function(data) {
-        showToast('🗑️ 消息已删除 (ID: ' + data.id + ')', false);
-        loadAll();
-    });
+    function escapeHtml(text) {
+        if (!text) return '';
+        const div = document.createElement('div');
+        div.textContent = text;
+        return div.innerHTML;
+    }
 
     // ============================================================
-    //  渲染 Markdown + KaTeX
+    //  渲染 Markdown + KaTeX（安全版）
     // ============================================================
     function renderMarkdown(text) {
         if (!text) return '';
         try {
-            // 第一步：处理 KaTeX 公式
-            let result = text;
+            // 第一步：先转义 HTML，防止 XSS
+            let result = escapeHtml(text);
             
+            // 第二步：处理 KaTeX 公式
             // 处理 $$...$$ (块级公式)
             result = result.replace(/\$\$([\s\S]*?)\$\$/g, function(match, content) {
                 try {
@@ -361,7 +350,7 @@
                 }
             });
             
-            // 处理 $...$ (行内公式) - 注意不要匹配 $$ 内的内容
+            // 处理 $...$ (行内公式)
             result = result.replace(/\$(?!\$)([^\$]+)\$(?!\$)/g, function(match, content) {
                 try {
                     return katex.renderToString(content.trim(), { 
@@ -374,10 +363,12 @@
                 }
             });
             
-            // 第二步：渲染 Markdown
+            // 第三步：渲染 Markdown（GFM 模式）
             const html = marked.parse(result, {
                 breaks: true,
-                gfm: true
+                gfm: true,
+                headerIds: false,
+                mangle: false
             });
             
             return html;
@@ -387,12 +378,27 @@
         }
     }
 
-    function escapeHtml(text) {
-        if (!text) return '';
-        const div = document.createElement('div');
-        div.textContent = text;
-        return div.innerHTML;
-    }
+    // ============================================================
+    //  Socket.IO 监听
+    // ============================================================
+    socket.on('system_message', function(data) {
+        showToast('📢 ' + escapeHtml(data.content), false);
+    });
+
+    socket.on('user_banned', function(data) {
+        showToast('🚫 用户 ' + escapeHtml(data.username) + ' 已被封禁！', false);
+        loadAll();
+    });
+
+    socket.on('user_unbanned', function(data) {
+        showToast('✅ 用户 ' + escapeHtml(data.username) + ' 已解封', false);
+        loadAll();
+    });
+
+    socket.on('message_deleted', function(data) {
+        showToast('🗑️ 消息已删除 (ID: ' + data.id + ')', false);
+        loadAll();
+    });
 
     // ============================================================
     //  加载数据
@@ -433,7 +439,7 @@
         document.getElementById('totalAdmins').textContent = admins;
         document.getElementById('totalBanned').textContent = banned;
         document.getElementById('totalMessages').textContent = messages.length;
-        document.getElementById('adminName').textContent = `👤 管理员：${currentAdmin || '未知'}`;
+        document.getElementById('adminName').textContent = `👤 管理员：${escapeHtml(currentAdmin || '未知')}`;
         document.getElementById('msgCount').textContent = `共 ${messages.length} 条消息`;
     }
 
@@ -448,15 +454,15 @@
         tbody.innerHTML = filtered.map(u => `
             <tr>
                 <td>${u.id || '-'}</td>
-                <td><strong>${u.username || '未知'}</strong></td>
+                <td><strong>${escapeHtml(u.username || '未知')}</strong></td>
                 <td>${u.is_admin ? '<span class="badge badge-admin">管理员</span>' : '普通用户'}</td>
                 <td>${u.is_banned ? '<span class="badge badge-banned">已封禁</span>' : '<span class="badge badge-normal">正常</span>'}</td>
-                <td>${u.created_at || '-'}</td>
+                <td>${escapeHtml(u.created_at || '-')}</td>
                 <td>
                     ${u.is_admin ? '<span style="color:#888;">不可操作</span>' : 
                       (u.is_banned ? 
-                        `<button class="btn btn-success" onclick="unbanUser(${u.id}, '${u.username}')">解封</button>` :
-                        `<button class="btn btn-danger" onclick="banUser(${u.id}, '${u.username}')">封禁</button>`
+                        `<button class="btn btn-success" onclick="unbanUser(${u.id}, '${escapeHtml(u.username)}')">解封</button>` :
+                        `<button class="btn btn-danger" onclick="banUser(${u.id}, '${escapeHtml(u.username)}')">封禁</button>`
                       )}
                 </td>
             </tr>
@@ -478,12 +484,14 @@
         const display = [...filtered].reverse().slice(0, 200);
         tbody.innerHTML = display.map(m => {
             const rendered = renderMarkdown(m.content || '');
+            const safeUsername = escapeHtml(m.username || '匿名');
+            const safeTime = escapeHtml(m.timestamp || '-');
             return `
             <tr>
                 <td>${m.id || '-'}</td>
-                <td><strong>${m.username || '匿名'}</strong></td>
+                <td><strong>${safeUsername}</strong></td>
                 <td><div class="msg-content">${rendered}</div></td>
-                <td>${m.timestamp || '-'}</td>
+                <td>${safeTime}</td>
                 <td>
                     <button class="btn btn-danger" onclick="deleteMessage(${m.id})">删除</button>
                 </td>
@@ -606,8 +614,7 @@
     loadAll();
     startAutoRefresh();
     console.log('✅ 管理后台已加载');
-    console.log('📌 支持 Markdown 和 KaTeX 渲染');
-    console.log('📌 封禁/解封/删除消息会全局播报');
+    console.log('📌 支持 Markdown 和 KaTeX 渲染（安全模式）');
 </script>
 </body>
 </html>
