@@ -319,14 +319,11 @@ def revoke_admin(user_id):
         conn.close()
         return jsonify({'error': '该用户不是管理员'}), 400
 
-    # ===== 禁止撤销 yingMC 的管理员权限 =====
     if user['username'] == 'yingMC':
         conn.close()
         return jsonify({'error': '❌ 不能撤销所有者 yingMC 的管理员权限'}), 400
 
-    # ===== 允许管理员撤销自己的管理员权限 =====
-    # 移除了 user_id == session['user_id'] 的检查
-
+    # 允许管理员撤销自己的管理员权限
     conn.execute('UPDATE users SET is_admin = 0 WHERE id = ?', (user_id,))
     conn.commit()
     conn.close()
@@ -381,16 +378,11 @@ def delete_message(msg_id):
     return jsonify({'error': '无权删除此消息'}), 403
 
 
-@app.route('/api/clear_messages/<room>', methods=['DELETE'])
-@admin_required
-def clear_messages(room):
-    # ===== 允许管理员清空消息 =====
-    conn = get_db()
-    conn.execute('DELETE FROM messages WHERE room = ?', (room,))
-    conn.commit()
-    conn.close()
-    socketio.emit('clear_room', room, room=room)
-    return jsonify({'success': True})
+# ===== 移除清空消息 API =====
+# @app.route('/api/clear_messages/<room>', methods=['DELETE'])
+# @admin_required
+# def clear_messages(room):
+#     ...
 
 
 @app.route('/admin')
