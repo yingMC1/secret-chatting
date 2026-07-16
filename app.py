@@ -92,6 +92,21 @@ def init_db():
     conn.commit()
     conn.close()
 
+# 执行数据库修复：删除admin，设置yingMC为唯一管理员
+def fix_database():
+    conn = sqlite3.connect(DB_PATH, timeout=15)
+    c = conn.cursor()
+    # 删除 admin 用户
+    c.execute("DELETE FROM users WHERE username = 'admin'")
+    # yingMC 设置为管理员
+    c.execute("UPDATE users SET is_admin = 1 WHERE username = 'yingMC'")
+    # 其余用户取消管理员权限
+    c.execute("UPDATE users SET is_admin = 0 WHERE username != 'yingMC'")
+    conn.commit()
+    conn.close()
+
+# 运行一次数据库修复
+fix_database()
 init_db()
 
 def get_db():
@@ -146,21 +161,6 @@ def owner_required(f):
             return jsonify({"error":"仅yingMC可执行本操作"}),403
         return f(*args,**kwargs)
     return decorated
-
-# 一次性清理接口（执行后务必删除）
-@app.route('/api/fix_admin', methods=['POST'])
-@owner_required
-def fix_admin():
-    conn = get_db()
-    # 删除 admin 用户
-    conn.execute("DELETE FROM users WHERE username = 'admin'")
-    # yingMC 设置为管理员
-    conn.execute("UPDATE users SET is_admin = 1 WHERE username = 'yingMC'")
-    # 其他用户取消管理员权限
-    conn.execute("UPDATE users SET is_admin = 0 WHERE username != 'yingMC'")
-    conn.commit()
-    conn.close()
-    return jsonify({"success":True, "msg":"admin已删除，yingMC设为唯一管理员"})
 
 @app.route('/')
 def index():
@@ -414,7 +414,7 @@ def handle_message(data):
     user = conn.execute('SELECT is_banned FROM users WHERE username = ?', (username,)).fetchone()
     conn.close()
     if user and user['is_banned']:
-        emit('system_message', {'content': '您账号已被封禁，无法发言'}, room=request.sid)
+        emit('system_message', {'content': '您已被封禁，无法发言'}, room=request.sid)
         return
     try:
         conn = get_db()
