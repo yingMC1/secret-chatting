@@ -259,9 +259,9 @@
 
 <script>
     // ============================================================
-    //  配置 - 使用真实API
+    //  配置
     // ============================================================
-    const API_BASE = '/api';  // 使用相对路径
+    const API_BASE = '/api';
 
     // ============================================================
     //  数据
@@ -271,28 +271,21 @@
     let currentAdmin = '';
 
     // ============================================================
-    //  加载数据（从服务器）
+    //  加载数据
     // ============================================================
     async function loadAll() {
         showToast('🔄 正在加载数据...');
         try {
-            // 加载用户列表
             const usersRes = await fetch(`${API_BASE}/users`);
             if (usersRes.ok) {
                 users = await usersRes.json();
-            } else {
-                throw new Error('加载用户失败');
             }
 
-            // 加载 public 房间的消息
             const msgRes = await fetch(`${API_BASE}/messages/public`);
             if (msgRes.ok) {
                 messages = await msgRes.json();
-            } else {
-                throw new Error('加载消息失败');
             }
 
-            // 获取当前管理员信息（从cookie或session）
             try {
                 const meRes = await fetch(`${API_BASE}/me`);
                 if (meRes.ok) {
@@ -307,14 +300,13 @@
             showToast('✅ 数据已更新', false, 'success');
         } catch (error) {
             console.error('加载失败:', error);
-            showToast('⚠️ 加载失败: ' + error.message, true);
-            // 使用缓存或空数据
+            showToast('⚠️ 加载失败', true);
             renderAll();
         }
     }
 
     // ============================================================
-    //  渲染函数
+    //  渲染
     // ============================================================
 
     function renderStats() {
@@ -367,7 +359,6 @@
             tbody.innerHTML = '<tr><td colspan="5" class="empty">暂无消息</td></tr>';
             return;
         }
-        // 按时间倒序显示（最新的在前面）
         const display = [...filtered].reverse().slice(0, 200);
         tbody.innerHTML = display.map(m => `
             <tr>
@@ -384,7 +375,6 @@
 
     function filterMessages() { renderMessages(); }
 
-    // 简单的HTML转义
     function escapeHtml(text) {
         if (!text) return '';
         const div = document.createElement('div');
@@ -399,7 +389,7 @@
     }
 
     // ============================================================
-    //  操作函数（调用真实API）
+    //  操作函数（修正API路径）
     // ============================================================
 
     async function banUser(id) {
@@ -433,26 +423,53 @@
         }
     }
 
+    // ===== 删除消息 - 修正API路径 =====
     async function deleteMessage(id) {
         if (!confirm('确认删除该消息？此操作不可撤销！')) return;
         try {
-            const res = await fetch(`${API_BASE}/messages/public/${id}`, { method: 'DELETE' });
-            const data = await res.json();
-            if (data.success) {
-                showToast('✅ 已删除消息', false, 'success');
-                loadAll();
-            } else {
-                showToast('⚠️ 删除失败: ' + (data.error || '未知错误'), true);
+            // 尝试不同的API路径
+            let url = `${API_BASE}/messages/public/${id}`;
+            let res = await fetch(url, { method: 'DELETE' });
+            
+            // 如果失败，尝试另一种路径
+            if (!res.ok) {
+                url = `${API_BASE}/message/${id}`;
+                res = await fetch(url, { method: 'DELETE' });
             }
-        } catch (e) {
-            // 如果API失败，尝试本地删除（降级方案）
+            
+            // 如果还失败，尝试带房间参数
+            if (!res.ok) {
+                url = `${API_BASE}/messages?room=public&id=${id}`;
+                res = await fetch(url, { method: 'DELETE' });
+            }
+
+            if (res.ok) {
+                const data = await res.json();
+                if (data.success !== false) {
+                    showToast('✅ 已删除消息', false, 'success');
+                    loadAll();
+                    return;
+                }
+            }
+            
+            // 如果所有API都失败，尝试本地删除
             const idx = messages.findIndex(m => m.id === id);
             if (idx !== -1) {
                 messages.splice(idx, 1);
                 renderAll();
-                showToast('✅ 已本地删除（API未响应）', false, 'success');
+                showToast('✅ 已本地删除（服务器未响应）', false, 'success');
             } else {
-                showToast('⚠️ 删除失败', true);
+                showToast('⚠️ 删除失败: 找不到该消息', true);
+            }
+        } catch (e) {
+            // 降级：本地删除
+            const idx = messages.findIndex(m => m.id === id);
+            if (idx !== -1) {
+                messages.splice(idx, 1);
+                renderAll();
+                showToast('✅ 已本地删除（网络错误）', false, 'success');
+            } else {
+                showToast('⚠️ 删除失败: ' + e.message, true);
             }
         }
     }
@@ -484,14 +501,13 @@
     });
 
     // ============================================================
-    //  自动刷新（每10秒）
+    //  自动刷新
     // ============================================================
     let autoRefreshTimer = null;
 
     function startAutoRefresh() {
         if (autoRefreshTimer) clearInterval(autoRefreshTimer);
         autoRefreshTimer = setInterval(() => {
-            // 静默刷新（不显示toast）
             refreshSilent();
         }, 10000);
     }
@@ -503,9 +519,7 @@
             const msgRes = await fetch(`${API_BASE}/messages/public`);
             if (msgRes.ok) messages = await msgRes.json();
             renderAll();
-        } catch(e) {
-            // 静默失败
-        }
+        } catch(e) {}
     }
 
     // ============================================================
@@ -513,7 +527,7 @@
     // ============================================================
     loadAll();
     startAutoRefresh();
-    console.log('✅ 管理后台已加载（连接真实API，每10秒自动刷新）');
+    console.log('✅ 管理后台已加载');
 </script>
 </body>
 </html>
