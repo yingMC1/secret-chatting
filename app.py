@@ -1,4 +1,4 @@
-# 【必须放在所有导入最前面】gevent猴子补丁，解决worker直接被杀
+# 第一行必须放gevent补丁
 from gevent import monkey
 monkey.patch_all()
 
@@ -10,26 +10,23 @@ import sqlite3
 import hashlib
 import json
 import os
-from datetime import datetime  # 补充缺失导入
+from datetime import datetime
 from flask_cors import CORS
 
 app = Flask(__name__)
 app.secret_key = 'your-secret-key-change-this-in-production'
 CORS(app)
-# 匹配 gevent worker
-socketio = SocketIO(app, cors_allowed_origins="*", async_mode="gevent")
+socketio = SocketIO(app, cors_allowed_origins="*", async_mode="gevent", logger=False, engineio_logger=False)
+# 关闭socketio日志，减少IO与内存开销
 
-# ============ 数据库初始化 ============
 DB_PATH = 'chatroom.db'
 
 def init_db():
-    # 优化：数据库已存在则跳过初始化，避免SQLite文件锁冲突
     if os.path.exists(DB_PATH):
         return
     conn = sqlite3.connect(DB_PATH)
     c = conn.cursor()
-    
-    # 用户表（包含管理员）
+    # 建表语句不变
     c.execute('''
         CREATE TABLE IF NOT EXISTS users (
             id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -40,8 +37,6 @@ def init_db():
             created_at TEXT DEFAULT CURRENT_TIMESTAMP
         )
     ''')
-    
-    # 消息表
     c.execute('''
         CREATE TABLE IF NOT EXISTS messages (
             id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -51,8 +46,6 @@ def init_db():
             timestamp TEXT DEFAULT CURRENT_TIMESTAMP
         )
     ''')
-    
-    # 房间表
     c.execute('''
         CREATE TABLE IF NOT EXISTS rooms (
             id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -61,28 +54,23 @@ def init_db():
             created_at TEXT DEFAULT CURRENT_TIMESTAMP
         )
     ''')
-    
-    # 创建默认管理员（admin / admin123）
     admin_pwd = hashlib.sha256('admin123'.encode()).hexdigest()
     try:
         c.execute('INSERT INTO users (username, password, is_admin) VALUES (?, ?, 1)', ('admin', admin_pwd))
     except:
         pass
-    
-    # 创建默认房间
     try:
         c.execute('INSERT INTO rooms (room_name, created_by) VALUES (?, ?)', ('public', 'system'))
     except:
         pass
-    
     conn.commit()
     conn.close()
 
 init_db()
 
-# ============ 辅助函数 ============
+# 每次请求新建独立连接，不使用全局连接
 def get_db():
-    conn = sqlite3.connect(DB_PATH, check_same_thread=False)
+    conn = sqlite3.connect(DB_PATH, timeout=10)
     conn.row_factory = sqlite3.Row
     return conn
 
@@ -110,7 +98,6 @@ def admin_required(f):
         return f(*args, **kwargs)
     return decorated
 
-# ============ 路由 ============
 @app.route('/')
 def index():
     if 'user_id' not in session:
@@ -133,12 +120,9 @@ def login():
     data = request.get_json()
     username = data.get('username')
     password = hash_password(data.get('password', ''))
-    
     conn = get_db()
-    user = conn.execute('SELECT id, username, is_admin, is_banned FROM users WHERE username = ? AND password = ?', 
-                        (username, password)).fetchone()
+    user = conn.execute('SELECT id, username, is_admin, is_banned FROM users WHERE username = ? AND password = ?', (username, password)).fetchone()
     conn.close()
-    
     if user:
         if user['is_banned']:
             return jsonify({'error': '该账号已被封禁'}), 403
@@ -152,7 +136,6 @@ def register():
     data = request.get_json()
     username = data.get('username')
     password = hash_password(data.get('password', ''))
-    
     conn = get_db()
     try:
         conn.execute('INSERT INTO users (username, password) VALUES (?, ?)', (username, password))
@@ -168,14 +151,12 @@ def logout():
     session.clear()
     return jsonify({'success': True})
 
+# 消息限制只加载50条，减少内存
 @app.route('/api/messages/<room>')
 @login_required
 def get_messages(room):
     conn = get_db()
-    messages = conn.execute('''
-        SELECT username, content, timestamp FROM messages 
-        WHERE room = ? ORDER BY id DESC LIMIT 100
-    ''', (room,)).fetchall()
+    messages = conn.execute('SELECT username, content, timestamp FROM messages WHERE room = ? ORDER BY id DESC LIMIT 50', (room,)).fetchall()
     conn.close()
     return jsonify([dict(m) for m in messages[::-1]])
 
@@ -206,12 +187,10 @@ def ban_user(user_id):
     conn.execute('UPDATE users SET is_banned = 1 WHERE id = ?', (user_id,))
     conn.commit()
     conn.close()
-    # 踢出被禁用户（通过socketio强制断开）
     socketio.emit('force_logout', room=str(user_id))
     return jsonify({'success': True})
 
 @app.route('/api/unban/<int:user_id>', methods=['POST'])
-@admin_required
 def unban_user(user_id):
     conn = get_db()
     conn.execute('UPDATE users SET is_banned = 0 WHERE id = ?', (user_id,))
@@ -243,7 +222,7 @@ def clear_messages(room):
 def admin_panel():
     return render_template('admin.html')
 
-# ============ SocketIO 事件 ============
+# Socket事件
 @socketio.on('join')
 def handle_join(data):
     room = data.get('room', 'public')
@@ -263,28 +242,20 @@ def handle_leave(data):
 def handle_message(data):
     room = data.get('room', 'public')
     username = session.get('username', '匿名')
-    content = data.get('content', '')
-    
-    if not content.strip():
+    content = data.get('content', '').strip()
+    if not content:
         return
-    
-    # 检查用户是否被禁
     conn = get_db()
     user = conn.execute('SELECT is_banned FROM users WHERE username = ?', (username,)).fetchone()
     conn.close()
     if user and user['is_banned']:
         emit('system_message', {'content': '您已被封禁，无法发送消息'}, room=request.sid)
         return
-    
-    # 保存消息
     conn = get_db()
-    cursor = conn.execute('INSERT INTO messages (room, username, content) VALUES (?, ?, ?)', 
-                          (room, username, content))
+    cursor = conn.execute('INSERT INTO messages (room, username, content) VALUES (?, ?, ?)', (room, username, content))
     msg_id = cursor.lastrowid
     conn.commit()
     conn.close()
-    
-    # 广播消息
     emit('new_message', {
         'id': msg_id,
         'username': username,
@@ -299,8 +270,6 @@ def handle_admin_message(data):
         content = data.get('content', '')
         emit('system_message', {'content': f'[管理员] {content}'}, room=room)
 
-# ============ 启动 ============
 if __name__ == '__main__':
-    # 读取Railway自动分配端口
     port = int(os.environ.get("PORT", 5000))
     socketio.run(app, host='0.0.0.0', port=port, debug=False)
