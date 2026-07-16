@@ -22,16 +22,13 @@ socketio = SocketIO(app, cors_allowed_origins="*", async_mode="threading", logge
 
 DB_PATH = 'chatroom.db'
 
-# 防CC攻击（原生实现，无第三方库）
 ip_request_counter = defaultdict(int)
 ip_last_clean = defaultdict(int)
 MAX_REQUEST_PER_MINUTE = 120
 
-# 消息发送频率限制
 user_send_time = {}
 RATE_LIMIT_SECONDS = 1.5
 
-# WebSocket单IP连接限制
 ws_conn = defaultdict(int)
 MAX_WS_PER_IP = 8
 
@@ -110,7 +107,6 @@ def get_real_ip():
         return request.headers.get("X-Forwarded-For").split(",")[0].strip()
     return request.remote_addr
 
-# 原生IP请求频率限制（防CC）
 def check_cc():
     ip = get_real_ip()
     now = time.time()
@@ -148,7 +144,6 @@ def owner_required(f):
         return f(*args, **kwargs)
     return decorated
 
-# ====================== 路由 ======================
 @app.route('/')
 def index():
     if not check_cc():
@@ -361,7 +356,6 @@ def get_rooms():
 def admin_panel():
     return render_template("admin.html")
 
-# ====================== SocketIO ======================
 @socketio.on("connect")
 def on_connect():
     ip = get_real_ip()
@@ -443,4 +437,4 @@ def admin_msg(data):
 
 if __name__ == '__main__':
     port = int(os.environ.get("PORT", 8080))
-    socketio.run(app, host='0.0.0.0', port=port, debug=False)
+    socketio.run(app, host='0.0.0.0', port=port, debug=False, allow_unsafe_werkzeug=True)
