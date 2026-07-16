@@ -183,7 +183,7 @@
             color: rgba(255, 255, 255, 0.5);
             font-size: 11px;
         }
-        /* ===== 关键修复：保留换行 ===== */
+        /* ===== 关键：保留换行 ===== */
         .message .msg-content {
             font-size: 15px;
             line-height: 1.8;
@@ -286,7 +286,8 @@
             position: relative;
             min-width: 150px;
         }
-        .input-area input {
+        /* ===== 输入框支持换行：用 textarea 替代 input ===== */
+        .input-area textarea {
             width: 100%;
             padding: 12px 20px;
             border: none;
@@ -296,12 +297,17 @@
             font-size: 15px;
             outline: none;
             transition: all 0.3s;
+            resize: none;
+            min-height: 50px;
+            max-height: 150px;
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            line-height: 1.6;
         }
-        .input-area input:focus {
+        .input-area textarea:focus {
             background: #1a3a6a;
             box-shadow: 0 0 0 2px #e94560;
         }
-        .input-area input::placeholder {
+        .input-area textarea::placeholder {
             color: #6a7a9a;
         }
         .input-area button {
@@ -314,6 +320,7 @@
             font-weight: bold;
             cursor: pointer;
             transition: all 0.3s;
+            align-self: flex-end;
         }
         .input-area button:hover {
             background: #ff6b81;
@@ -407,9 +414,10 @@
             .input-area {
                 padding: 12px 15px;
             }
-            .input-area input {
+            .input-area textarea {
                 font-size: 14px;
                 padding: 10px 15px;
+                min-height: 40px;
             }
             .input-area button {
                 padding: 10px 20px;
@@ -456,7 +464,8 @@
 
         <div class="input-area">
             <div class="input-wrapper">
-                <input type="text" id="messageInput" placeholder="输入消息... @用户名 提及他人" autofocus>
+                <!-- ===== 用 textarea 替代 input，天然支持换行 ===== -->
+                <textarea id="messageInput" placeholder="输入消息... @用户名 提及他人" rows="1" autofocus></textarea>
                 <div class="mention-suggest" id="mentionSuggest"></div>
             </div>
             <button id="sendBtn" onclick="sendMessage()">发送</button>
@@ -479,6 +488,12 @@
         let allUsers = [];
         let mentionActive = false;
         let mentionIndex = -1;
+
+        // ===== 自动调整 textarea 高度 =====
+        function autoResize(textarea) {
+            textarea.style.height = 'auto';
+            textarea.style.height = Math.min(textarea.scrollHeight, 150) + 'px';
+        }
 
         function loadUsers() {
             fetch('/api/users', { credentials: 'include' })
@@ -588,10 +603,6 @@
                 if (el) el.remove();
             });
 
-            socket.on('clear_room', () => {
-                // 清空消息功能已移除，此事件不会触发
-            });
-
             socket.on('force_logout', () => {
                 alert('您已被管理员强制下线');
                 logout();
@@ -651,6 +662,7 @@
                 input.value = current + ` @${name}`;
             }
             input.setSelectionRange(input.value.length, input.value.length);
+            autoResize(input);
             hideMentionSuggest();
         }
 
@@ -694,16 +706,18 @@
             mentionIndex = -1;
         }
 
+        // ===== 发送消息：保留换行符 =====
         function sendMessage() {
             const input = document.getElementById('messageInput');
-            const content = input.value;
+            const content = input.value;  // 保留所有字符，包括 \n
             if (!content.trim() || !socket) return;
 
             socket.emit('message', {
                 room: room,
-                content: content
+                content: content  // 直接发送，保留换行
             });
             input.value = '';
+            autoResize(input);
             input.focus();
             hideMentionSuggest();
         }
@@ -760,10 +774,14 @@
                 .catch(err => console.error('加载消息失败:', err));
         }
 
-        document.getElementById('messageInput').addEventListener('input', function(e) {
+        // ===== textarea 事件 =====
+        const textarea = document.getElementById('messageInput');
+
+        textarea.addEventListener('input', function(e) {
+            autoResize(this);
+
             const value = this.value;
             const cursorPos = this.selectionStart;
-
             const beforeCursor = value.substring(0, cursorPos);
             const atMatch = beforeCursor.match(/@([^\s]*)$/);
 
@@ -774,8 +792,8 @@
             }
         });
 
-        // ===== 关键修复：Enter 发送，Shift+Enter 换行 =====
-        document.getElementById('messageInput').addEventListener('keydown', function(e) {
+        // ===== Enter 发送，Shift+Enter 换行 =====
+        textarea.addEventListener('keydown', function(e) {
             if (e.key === 'Enter' && !e.shiftKey) {
                 e.preventDefault();
                 sendMessage();
