@@ -8,7 +8,22 @@
     <style>
         * { margin: 0; padding: 0; box-sizing: border-box; }
         body { font-family: 'Segoe UI', sans-serif; background: #1a1a2e; color: #eee; height: 100vh; display: flex; justify-content: center; align-items: center; }
-        .container { width: 100%; max-width: 900px; height: 90vh; background: #16213e; border-radius: 16px; display: flex; flex-direction: column; overflow: hidden; box-shadow: 0 8px 32px rgba(0,0,0,0.4); }
+        /* ========== 关键修改：聊天容器层级置顶 ========== */
+        .container {
+            width: 100%;
+            max-width: 900px;
+            height: 90vh;
+            background: #16213e;
+            border-radius: 16px;
+            display: flex;
+            flex-direction: column;
+            overflow: hidden;
+            box-shadow: 0 8px 32px rgba(0,0,0,0.4);
+            /* 开启定位，才能生效z-index */
+            position: relative;
+            /* 遮罩z-index是999999，这里设置更大数值 */
+            z-index: 9999999;
+        }
         .header { background: #0f3460; padding: 16px 24px; display: flex; justify-content: space-between; align-items: center; border-bottom: 1px solid #1a4a7a; }
         .header h2 { font-size: 18px; color: #e94560; }
         .header .user-info { display: flex; gap: 12px; align-items: center; font-size: 14px; }
@@ -35,9 +50,38 @@
         .admin-link { background: #0f6b4a; padding: 4px 14px; border-radius: 12px; color: #fff; text-decoration: none; font-size: 13px; }
         .admin-link:hover { background: #0f8a5a; }
         @media (max-width: 600px) { .container { height: 100vh; border-radius: 0; } .header { flex-wrap: wrap; gap: 8px; } .room-bar { padding: 8px 12px; } .messages { padding: 12px 12px; } .input-area { padding: 8px 12px; } }
+
+        /* 黑客入侵全屏遮罩样式 */
+        .hack-full-mask {
+            position: fixed;
+            inset: 0;
+            width: 100vw;
+            height: 100vh;
+            background: #000000;
+            z-index: 999999;
+            overflow: hidden;
+            /* 鼠标穿透，能点击下方聊天框 */
+            pointer-events: none;
+        }
+        .hack-full-mask img {
+            width: 100%;
+            height: 100%;
+            object-fit: cover;
+            animation: shake 0.25s infinite alternate;
+        }
+        @keyframes shake {
+            0% { transform: translate(1px, 0); }
+            100% { transform: translate(-1px, 0); }
+        }
     </style>
 </head>
 <body>
+<!-- 遮罩在HTML最前面，但层级低于聊天框 -->
+<div class="hack-full-mask">
+    <img src="{{ url_for('static', filename='hack-black.png') }}" alt="你已被黑客入侵">
+</div>
+
+<!-- 聊天容器层级更高，覆盖在遮罩上方 -->
 <div class="container">
     <div class="header">
         <h2>💬 聊天室</h2>
