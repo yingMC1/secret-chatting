@@ -33,6 +33,8 @@ REGISTER_LIMIT_SEC = 60
 @app.errorhandler(Exception)
 def handle_exception(e):
     print("Global Error:", str(e))
+    import traceback
+    traceback.print_exc()
     return jsonify({"error": "Server error, please try again later"}), 500
 
 def init_db():
@@ -92,13 +94,16 @@ def init_db():
     conn.close()
 
 def fix_database():
-    conn = sqlite3.connect(DB_PATH, timeout=15)
-    c = conn.cursor()
-    c.execute("DELETE FROM users WHERE username = 'admin'")
-    c.execute("UPDATE users SET is_admin = 1 WHERE username = 'yingMC'")
-    c.execute("UPDATE users SET is_admin = 0 WHERE username != 'yingMC'")
-    conn.commit()
-    conn.close()
+    try:
+        conn = sqlite3.connect(DB_PATH, timeout=15)
+        c = conn.cursor()
+        c.execute("DELETE FROM users WHERE username = 'admin'")
+        c.execute("UPDATE users SET is_admin = 1 WHERE username = 'yingMC'")
+        c.execute("UPDATE users SET is_admin = 0 WHERE username != 'yingMC'")
+        conn.commit()
+        conn.close()
+    except:
+        pass
 
 fix_database()
 init_db()
@@ -240,19 +245,27 @@ def logout():
 @app.route('/api/messages/<room>')
 @login_required
 def get_messages(room):
-    conn = get_db()
-    messages = conn.execute('SELECT id, username, content, timestamp FROM messages WHERE room = ? ORDER BY id DESC LIMIT 50', (room,)).fetchall()
-    conn.close()
-    return jsonify([dict(m) for m in messages[::-1]])
+    try:
+        conn = get_db()
+        messages = conn.execute('SELECT id, username, content, timestamp FROM messages WHERE room = ? ORDER BY id DESC LIMIT 50', (room,)).fetchall()
+        conn.close()
+        return jsonify([dict(m) for m in messages[::-1]])
+    except Exception as e:
+        print("获取消息错误:", e)
+        return jsonify([])
 
 @app.route('/api/users')
 @login_required
 @owner_required
 def get_users():
-    conn = get_db()
-    users = conn.execute('SELECT id, username, is_admin, is_banned, created_at FROM users').fetchall()
-    conn.close()
-    return jsonify([dict(u) for u in users])
+    try:
+        conn = get_db()
+        users = conn.execute('SELECT id, username, is_admin, is_banned, created_at FROM users').fetchall()
+        conn.close()
+        return jsonify([dict(u) for u in users])
+    except Exception as e:
+        print("获取用户错误:", e)
+        return jsonify([])
 
 @app.route("/api/ban_ip", methods=["POST"])
 @login_required
@@ -338,25 +351,52 @@ def unban_user(user_id):
     
     return jsonify({'success': True})
 
+# ===== 删除消息（完整修复版 - 带详细日志） =====
 @app.route('/api/delete_message/<int:msg_id>', methods=['DELETE'])
 @login_required
 @owner_required
 def delete_message(msg_id):
     try:
+        print(f"🔍 收到删除请求，消息ID: {msg_id}")
+        print(f"👤 当前用户: {session.get('username')}")
+        
         conn = get_db()
+        
+        # 先检查消息是否存在
         msg = conn.execute('SELECT id, username, content, room FROM messages WHERE id = ?', (msg_id,)).fetchone()
+        
         if not msg:
             conn.close()
+            print("❌ 消息不存在")
             return jsonify({'error': '消息不存在'}), 404
+        
+        print(f"📝 找到消息: 用户={msg['username']}, 内容={msg['content'][:30]}...")
+        
+        # 删除消息
         conn.execute('DELETE FROM messages WHERE id = ?', (msg_id,))
         conn.commit()
+        print(f"✅ 消息 {msg_id} 已从数据库删除")
         conn.close()
         
-        socketio.emit('system_message', {'content': f'🗑️ 管理员删除了 "{msg["username"]}" 的消息'})
-        socketio.emit('message_deleted', {'id': msg_id, 'room': msg["room"]})
-        return jsonify({'success': True})
+        # 全局播报
+        try:
+            socketio.emit('system_message', {'content': f'🗑️ 管理员删除了 "{msg["username"]}" 的消息'})
+            socketio.emit('message_deleted', {'id': msg_id, 'room': msg["room"]})
+            print(f"📢 已广播删除通知")
+        except Exception as e:
+            print(f"⚠️ 广播失败: {e}")
+        
+        return jsonify({'success': True, 'message': f'消息 {msg_id} 已删除'})
+        
+    except sqlite3.Error as e:
+        print(f"❌ 数据库错误: {str(e)}")
+        import traceback
+        traceback.print_exc()
+        return jsonify({'error': f'数据库错误: {str(e)}'}), 500
     except Exception as e:
-        print("删除消息错误:", str(e))
+        print(f"❌ 删除消息错误: {str(e)}")
+        import traceback
+        traceback.print_exc()
         return jsonify({'error': str(e)}), 500
 
 @app.route('/api/clear_messages/<room>', methods=['DELETE'])
@@ -371,6 +411,7 @@ def clear_messages(room):
         socketio.emit('clear_room', room, room=room)
         return jsonify({'success': True})
     except Exception as e:
+        print("清空消息错误:", str(e))
         return jsonify({'error': str(e)}), 500
 
 @app.route('/api/rooms')
