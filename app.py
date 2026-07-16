@@ -1,5 +1,5 @@
 # -*- coding: utf-8 -*-
-from flask import Flask, render_template, request, jsonify, session, redirect, url_for
+from flask import Flask, render_template, request, jsonify, session, redirect, url_for, make_response
 from flask_socketio import SocketIO, send, emit, join_room, leave_room
 from functools import wraps
 import sqlite3
@@ -8,18 +8,22 @@ import json
 import os
 from datetime import datetime
 from flask_cors import CORS
+import uuid
 
 app = Flask(__name__)
-app.secret_key = 'your-secret-key-change-this-in-production'
+# 安全配置：密钥从Railway环境变量读取，不要写死在代码里
+app.secret_key = os.getenv("SECRET_KEY", "your-secret-key-change-this-in-production")
+# Cookie配置
+app.config['SESSION_COOKIE_SECURE'] = True
+app.config['SESSION_COOKIE_HTTPONLY'] = True
 CORS(app)
-# 单进程启动使用threading异步模式，无需猴子补丁，内存更低
+
 socketio = SocketIO(app, cors_allowed_origins="*", async_mode="threading", logger=False, engineio_logger=False)
 
-# ============ 数据库初始化 ============
+# ============ 数据库初始化：新增ban_ip黑名单表 ============
 DB_PATH = 'chatroom.db'
 
 def init_db():
-    # 数据库存在则跳过初始化，避免锁冲突
     if os.path.exists(DB_PATH):
         return
     conn = sqlite3.connect(DB_PATH)
@@ -55,6 +59,16 @@ def init_db():
             created_at TEXT DEFAULT CURRENT_TIMESTAMP
         )
     ''')
+    # 新增：IP和设备指纹黑名单表
+    c.execute('''
+        CREATE TABLE IF NOT EXISTS ban_list (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            ip TEXT,
+            device_id TEXT,
+            reason TEXT,
+            ban_time TEXT DEFAULT CURRENT_TIMESTAMP
+        )
+    ''')
     
     # 默认管理员
     admin_pwd = hashlib.sha256('admin123'.encode()).hexdigest()
@@ -75,7 +89,6 @@ init_db()
 
 # ============ 辅助函数 ============
 def get_db():
-    # 每次请求新建短连接，减少内存占用
     conn = sqlite3.connect(DB_PATH, timeout=5)
     conn.row_factory = sqlite3.Row
     return conn
@@ -83,9 +96,31 @@ def get_db():
 def hash_password(pwd):
     return hashlib.sha256(pwd.encode()).hexdigest()
 
+# Railway获取真实用户IP（关键）
+def get_real_ip():
+    if request.headers.get("X-Forwarded-For"):
+        ip = request.headers.get("X-Forwarded-For").split(",")[0].strip()
+    else:
+        ip = request.remote_addr
+    return ip
+
+# 检查IP或者设备ID是否被封禁
+def is_ip_or_device_banned():
+    device_id = request.cookies.get("device_id")
+    ip = get_real_ip()
+    conn = get_db()
+    row = conn.execute('''
+        SELECT id FROM ban_list WHERE ip = ? OR device_id = ?
+    ''', (ip, device_id)).fetchone()
+    conn.close()
+    return row is not None
+
 def login_required(f):
     @wraps(f)
     def decorated(*args, **kwargs):
+        # 先校验IP/设备黑名单
+        if is_ip_or_device_banned():
+            return "你的设备或IP已被封禁",403
         if 'user_id' not in session:
             return jsonify({'error': '请先登录'}), 401
         return f(*args, **kwargs)
@@ -107,23 +142,49 @@ def admin_required(f):
 # ============ 路由 ============
 @app.route('/')
 def index():
+    # 给访客分配永久设备ID cookie
+    resp = make_response(render_template('placeholder.html'))
+    device_id = request.cookies.get("device_id")
+    if not device_id:
+        device_id = str(uuid.uuid4())
+        # 设置cookie有效期1年
+        resp.set_cookie("device_id", device_id, max_age=365*24*3600, httponly=True)
+
+    # 黑名单校验
+    if is_ip_or_device_banned():
+        return "你的设备或IP已被管理员封禁",403
+
     if 'user_id' not in session:
-        return redirect(url_for('login_page'))
+        resp = make_response(redirect(url_for('login_page')))
+        if not request.cookies.get("device_id"):
+            resp.set_cookie("device_id", device_id, max_age=365*24*3600, httponly=True)
+        return resp
+    
     conn = get_db()
     user = conn.execute('SELECT username, is_admin, is_banned FROM users WHERE id = ?', (session['user_id'],)).fetchone()
     rooms = conn.execute('SELECT room_name FROM rooms').fetchall()
     conn.close()
     if user and user['is_banned']:
         session.clear()
-        return '您已被封禁', 403
-    return render_template('index.html', username=user['username'], is_admin=user['is_admin'], rooms=[r['room_name'] for r in rooms])
+        return '您账号已被封禁', 403
+    resp = make_response(render_template('index.html', username=user['username'], is_admin=user['is_admin'], rooms=[r['room_name'] for r in rooms]))
+    if not request.cookies.get("device_id"):
+        resp.set_cookie("device_id", device_id, max_age=365*24*3600, httponly=True)
+    return resp
 
 @app.route('/login')
 def login_page():
-    return render_template('login.html')
+    resp = make_response(render_template('login.html'))
+    device_id = request.cookies.get("device_id")
+    if not device_id:
+        new_id = str(uuid.uuid4())
+        resp.set_cookie("device_id", new_id, max_age=365*24*3600, httponly=True)
+    return resp
 
 @app.route('/api/login', methods=['POST'])
 def login():
+    if is_ip_or_device_banned():
+        return jsonify({"error": "设备或IP被封禁"}),403
     data = request.get_json()
     username = data.get('username')
     password = hash_password(data.get('password', ''))
@@ -135,11 +196,14 @@ def login():
             return jsonify({'error': '该账号已被封禁'}), 403
         session['user_id'] = user['id']
         session['username'] = user['username']
+        session['is_admin'] = user['is_admin']
         return jsonify({'success': True, 'is_admin': user['is_admin']})
     return jsonify({'error': '用户名或密码错误'}), 401
 
 @app.route('/api/register', methods=['POST'])
 def register():
+    if is_ip_or_device_banned():
+        return jsonify({"error": "设备或IP被封禁"}),403
     data = request.get_json()
     username = data.get('username')
     password = hash_password(data.get('password', ''))
@@ -158,7 +222,6 @@ def logout():
     session.clear()
     return jsonify({'success': True})
 
-# 仅加载50条历史消息，降低内存
 @app.route('/api/messages/<room>')
 @login_required
 def get_messages(room):
@@ -175,6 +238,53 @@ def get_users():
     conn.close()
     return jsonify([dict(u) for u in users])
 
+# ============ 管理员新增：IP和设备封禁接口 ============
+@app.route("/api/ban_ip", methods=["POST"])
+@admin_required
+def ban_ip():
+    """封禁IP或者设备ID，POST参数 ip, device_id, reason"""
+    data = request.get_json()
+    ip = data.get("ip","")
+    dev_id = data.get("device_id","")
+    reason = data.get("reason","恶意捣乱")
+    conn = get_db()
+    if ip:
+        exist = conn.execute("SELECT id FROM ban_list WHERE ip = ?",(ip,)).fetchone()
+        if not exist:
+            conn.execute("INSERT INTO ban_list(ip,device_id,reason) VALUES (?,?,?)",(ip,dev_id,reason))
+    if dev_id:
+        exist = conn.execute("SELECT id FROM ban_list WHERE device_id = ?",(dev_id,)).fetchone()
+        if not exist:
+            conn.execute("INSERT INTO ban_list(ip,device_id,reason) VALUES (?,?,?)",(ip,dev_id,reason))
+    conn.commit()
+    conn.close()
+    socketio.emit("kick_by_ban") # 强制对方socket断开
+    return jsonify({"success":True})
+
+@app.route("/api/unban_ip", methods=["POST"])
+@admin_required
+def unban_ip():
+    data = request.get_json()
+    ip = data.get("ip","")
+    dev_id = data.get("device_id","")
+    conn = get_db()
+    if ip:
+        conn.execute("DELETE FROM ban_list WHERE ip = ?",(ip,))
+    if dev_id:
+        conn.execute("DELETE FROM ban_list WHERE device_id = ?",(dev_id,))
+    conn.commit()
+    conn.close()
+    return jsonify({"success":True})
+
+@app.route("/api/get_banlist")
+@admin_required
+def get_banlist():
+    conn = get_db()
+    items = conn.execute("SELECT * FROM ban_list").fetchall()
+    conn.close()
+    return jsonify([dict(r) for r in items])
+
+# ============ 原有用户封禁逻辑不变 ============
 @app.route('/api/rooms')
 @admin_required
 def get_rooms():
@@ -230,9 +340,13 @@ def clear_messages(room):
 def admin_panel():
     return render_template('admin.html')
 
-# ============ SocketIO 事件 ============
+# ============ SocketIO 事件：增加黑名单校验 ============
 @socketio.on('join')
 def handle_join(data):
+    # websocket连接时也校验黑名单
+    if is_ip_or_device_banned():
+        emit("ban_close",{"msg":"设备被封禁"})
+        return
     room = data.get('room', 'public')
     username = session.get('username', '匿名')
     join_room(room)
@@ -248,6 +362,9 @@ def handle_leave(data):
 
 @socketio.on('message')
 def handle_message(data):
+    if is_ip_or_device_banned():
+        emit("ban_close",{"msg":"设备被封禁"})
+        return
     room = data.get('room', 'public')
     username = session.get('username', '匿名')
     content = data.get('content', '').strip()
@@ -281,5 +398,3 @@ def handle_admin_message(data):
 if __name__ == '__main__':
     port = int(os.environ.get("PORT", 8080))
     socketio.run(app, host='0.0.0.0', port=port, debug=False, allow_unsafe_werkzeug=True)
-    port = int(os.environ.get("PORT", 8080))
-    socketio.run(app, host='0.0.0.0', port=port, debug=False)
