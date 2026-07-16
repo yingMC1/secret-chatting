@@ -16,28 +16,9 @@
             background: #000;
         }
 
-        /* 底层全屏彩虹故障遮罩 */
-        .hack-full-mask {
-            position: fixed;
-            inset: 0;
-            width: 100vw;
-            height: 100vh;
-            z-index: 999999;
-            overflow: hidden;
-            pointer-events: none;
-        }
-        .hack-full-mask img {
-            width: 100%;
-            height: 100%;
-            object-fit: cover;
-            animation: glitch-shift 0.2s infinite alternate;
-        }
-        @keyframes glitch-shift {
-            0% { transform: translate(2px, 1px); }
-            100% { transform: translate(-2px, -1px); }
-        }
+        /* 【已移除故障遮罩与图片相关代码】 */
 
-        /* CSS强制全屏聊天容器：铺满整个视口，无任何边距、圆角、阴影 */
+        /* CSS强制全屏聊天容器，铺满整个浏览器，无边距/圆角/阴影 */
         .container {
             position: fixed;
             inset: 0;
@@ -78,7 +59,7 @@
             cursor: pointer;
             font-size: 13px;
         }
-        /* 全屏按钮样式 */
+        /* 全屏切换按钮 */
         .fullscreen-btn {
             background: #2a65ff;
             border: none;
@@ -109,8 +90,6 @@
         }
         .room-bar .room-btn:hover { background: #3a4a6a; color: #fff; }
         .room-bar .room-btn.active { background: #e94560; color: #fff; }
-        .room-bar .room-btn.join-btn { background: #0f6b4a; }
-        .room-bar .room-btn.join-btn:hover { background: #0f8a5a; }
         .messages {
             flex: 1;
             padding: 16px 24px;
@@ -182,7 +161,6 @@
         }
         .admin-link:hover { background: #0f8a5a; }
 
-        /* 移动端适配 */
         @media (max-width: 600px) {
             .header { flex-wrap: wrap; gap: 8px; }
             .room-bar { padding: 8px 12px; }
@@ -192,12 +170,9 @@
     </style>
 </head>
 <body>
-    <!-- 底层全屏故障背景 -->
-    <div class="hack-full-mask">
-        <img src="{{ url_for('static', filename='hack-glitch-full.png') }}" alt="你已被黑客入侵">
-    </div>
+    <!-- 已完全删除故障遮罩、img图片标签，无任何图片资源加载 -->
 
-    <!-- CSS全屏聊天窗口 -->
+    <!-- 全覆盖聊天窗口 -->
     <div class="container">
         <div class="header">
             <h2>💬 聊天室</h2>
@@ -205,7 +180,6 @@
                 <span id="currentUser">{{ username }}</span>
                 {% if is_admin %}<span class="admin-badge">管理员</span>{% endif %}
                 {% if is_admin %}<a href="/admin" class="admin-link">管理后台</a>{% endif %}
-                <!-- 一键全屏按钮 -->
                 <button class="fullscreen-btn" onclick="toggleFullScreen()">全屏模式</button>
                 <button class="logout-btn" onclick="logout()">退出</button>
             </div>
@@ -294,7 +268,7 @@
             btn.classList.toggle('active', btn.dataset.room === room);
         });
         document.getElementById('messages').innerHTML = '';
-        fetch(`/api/messages/${room}`)
+        fetch(`/api/messages/public`)
             .then(res => res.json())
             .then(data => {
                 data.forEach(msg => {
@@ -308,22 +282,20 @@
             .then(() => { window.location.href = '/login'; });
     }
 
-    // 全屏切换函数（兼容所有浏览器）
+    // 浏览器原生全屏切换函数
     function toggleFullScreen() {
         const docEl = document.documentElement;
-        // 判断当前是否全屏
-        const isFull = document.fullscreenElement || document.webkitFullscreenElement || document.mozFullScreenElement || document.msFullscreenElement;
-        if (!isFull) {
-            // 进入全屏
-            const req = docEl.requestFullscreen || docEl.webkitRequestFullscreen || docEl.mozRequestFullScreen || docEl.msRequestFullscreen;
-            if(req) req.call(docEl).catch(err => console.log('全屏失败',err));
+        const fullState = document.fullscreenElement || document.webkitFullscreenElement || document.mozFullScreenElement || document.msFullscreenElement;
+        if (!fullState) {
+            const enter = docEl.requestFullscreen || docEl.webkitRequestFullscreen || docEl.mozRequestFullScreen || docEl.msRequestFullscreen;
+            enter?.call(docEl);
         } else {
-            // 退出全屏
             const exit = document.exitFullscreen || document.webkitExitFullscreen || document.mozCancelFullScreen || document.msExitFullscreen;
-            if(exit) exit.call(document);
+            exit?.call(document);
         }
     }
 
+    // 加载历史消息
     fetch(`/api/messages/public`)
         .then(res => res.json())
         .then(data => {
