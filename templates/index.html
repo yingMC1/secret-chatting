@@ -7,9 +7,37 @@
     <script src="https://cdn.socket.io/4.5.0/socket.io.min.js"></script>
     <style>
         * { margin: 0; padding: 0; box-sizing: border-box; }
-        body { font-family: 'Segoe UI', sans-serif; background: #1a1a2e; color: #eee; height: 100vh; display: flex; justify-content: center; align-items: center; }
-        /* ========== 关键修改：聊天容器层级置顶 ========== */
+        body { font-family: 'Segoe UI', sans-serif; background: #000; color: #eee; min-height: 100vh; overflow: hidden; }
+
+        /* 底层彩虹故障遮罩（永久底层） */
+        .hack-full-mask {
+            position: fixed;
+            inset: 0;
+            width: 100vw;
+            height: 100vh;
+            z-index: 999999;
+            overflow: hidden;
+            pointer-events: none; /* 鼠标穿透，不遮挡聊天操作 */
+        }
+        .hack-full-mask img {
+            width: 100%;
+            height: 100%;
+            object-fit: cover;
+            /* 轻微偏移故障动画，强化花屏效果 */
+            animation: glitch-shift 0.2s infinite alternate;
+        }
+        @keyframes glitch-shift {
+            0% { transform: translate(2px, 1px); }
+            100% { transform: translate(-2px, -1px); }
+        }
+
+        /* 聊天容器 全局永久最高层级置顶 */
         .container {
+            position: fixed;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+            z-index: 99999999; /* 远高于遮罩层级，永久在上层 */
             width: 100%;
             max-width: 900px;
             height: 90vh;
@@ -18,12 +46,9 @@
             display: flex;
             flex-direction: column;
             overflow: hidden;
-            box-shadow: 0 8px 32px rgba(0,0,0,0.4);
-            /* 开启定位，才能生效z-index */
-            position: relative;
-            /* 遮罩z-index是999999，这里设置更大数值 */
-            z-index: 9999999;
+            box-shadow: 0 8px 32px rgba(0,0,0,0.9);
         }
+
         .header { background: #0f3460; padding: 16px 24px; display: flex; justify-content: space-between; align-items: center; border-bottom: 1px solid #1a4a7a; }
         .header h2 { font-size: 18px; color: #e94560; }
         .header .user-info { display: flex; gap: 12px; align-items: center; font-size: 14px; }
@@ -49,61 +74,46 @@
         .input-area button:hover { background: #c73652; }
         .admin-link { background: #0f6b4a; padding: 4px 14px; border-radius: 12px; color: #fff; text-decoration: none; font-size: 13px; }
         .admin-link:hover { background: #0f8a5a; }
-        @media (max-width: 600px) { .container { height: 100vh; border-radius: 0; } .header { flex-wrap: wrap; gap: 8px; } .room-bar { padding: 8px 12px; } .messages { padding: 12px 12px; } .input-area { padding: 8px 12px; } }
 
-        /* 黑客入侵全屏遮罩样式 */
-        .hack-full-mask {
-            position: fixed;
-            inset: 0;
-            width: 100vw;
-            height: 100vh;
-            background: #000000;
-            z-index: 999999;
-            overflow: hidden;
-            /* 鼠标穿透，能点击下方聊天框 */
-            pointer-events: none;
-        }
-        .hack-full-mask img {
-            width: 100%;
-            height: 100%;
-            object-fit: cover;
-            animation: shake 0.25s infinite alternate;
-        }
-        @keyframes shake {
-            0% { transform: translate(1px, 0); }
-            100% { transform: translate(-1px, 0); }
+        /* 移动端适配 */
+        @media (max-width: 600px) {
+            .container { height: 100vh; border-radius: 0; max-width: 100%; width: 100%; }
+            .header { flex-wrap: wrap; gap: 8px; }
+            .room-bar { padding: 8px 12px; }
+            .messages { padding: 12px 12px; }
+            .input-area { padding: 8px 12px; }
         }
     </style>
 </head>
 <body>
-<!-- 遮罩在HTML最前面，但层级低于聊天框 -->
-<div class="hack-full-mask">
-    <img src="{{ url_for('static', filename='hack-black.png') }}" alt="你已被黑客入侵">
-</div>
+    <!-- 底层彩虹故障黑客遮罩 -->
+    <div class="hack-full-mask">
+        <img src="{{ url_for('static', filename='hack-glitch-full.png') }}" alt="你已被黑客入侵">
+    </div>
 
-<!-- 聊天容器层级更高，覆盖在遮罩上方 -->
-<div class="container">
-    <div class="header">
-        <h2>💬 聊天室</h2>
-        <div class="user-info">
-            <span id="currentUser">{{ username }}</span>
-            {% if is_admin %}<span class="admin-badge">管理员</span>{% endif %}
-            {% if is_admin %}<a href="/admin" class="admin-link">管理后台</a>{% endif %}
-            <button class="logout-btn" onclick="logout()">退出</button>
+    <!-- 永久置顶聊天窗口（全局最高层级） -->
+    <div class="container">
+        <div class="header">
+            <h2>💬 聊天室</h2>
+            <div class="user-info">
+                <span id="currentUser">{{ username }}</span>
+                {% if is_admin %}<span class="admin-badge">管理员</span>{% endif %}
+                {% if is_admin %}<a href="/admin" class="admin-link">管理后台</a>{% endif %}
+                <button class="logout-btn" onclick="logout()">退出</button>
+            </div>
+        </div>
+        <div class="room-bar" id="roomBar">
+            <span style="color:#888;font-size:13px;">房间：</span>
+            {% for room in rooms %}
+            <button class="room-btn {% if loop.first %}active{% endif %}" data-room="{{ room }}" onclick="switchRoom('{{ room }}')">{{ room }}</button>
+            {% endfor %}
+        </div>
+        <div class="messages" id="messages"></div>
+        <div class="input-area">
+            <input type="text" id="msgInput" placeholder="输入消息..." onkeydown="if(event.key==='Enter') sendMessage()">
+            <button onclick="sendMessage()">发送</button>
         </div>
     </div>
-    <div class="room-bar" id="roomBar">
-        <span style="color:#888;font-size:13px;">房间：</span>
-        {% for room in rooms %}
-        <button class="room-btn {% if loop.first %}active{% endif %}" data-room="{{ room }}" onclick="switchRoom('{{ room }}')">{{ room }}</button>
-        {% endfor %}
-    </div>
-    <div class="messages" id="messages"></div>
-    <div class="input-area">
-        <input type="text" id="msgInput" placeholder="输入消息..." onkeydown="if(event.key==='Enter') sendMessage()">
-        <button onclick="sendMessage()">发送</button>
-    </div>
-</div>
 
 <script>
     const username = '{{ username }}';
