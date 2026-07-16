@@ -19,34 +19,12 @@
         .room-bar .room-btn:hover { background: #3a4a6a; color: #fff; }
         .room-bar .room-btn.active { background: #e94560; color: #fff; }
         .messages { flex: 1; padding: 16px 24px; overflow-y: auto; display: flex; flex-direction: column; gap: 6px; background: #1a1a2e; }
-        .messages .msg { padding: 6px 12px; border-radius: 8px; max-width: 75%; word-wrap: break-word; font-size: 14px; line-height: 1.5; position: relative; }
+        .messages .msg { padding: 6px 12px; border-radius: 8px; max-width: 75%; word-wrap: break-word; font-size: 14px; line-height: 1.5; }
         .messages .msg.self { align-self: flex-end; background: #0f3460; }
         .messages .msg.other { align-self: flex-start; background: #2a2a4a; }
         .messages .msg.system { align-self: center; background: #2a1a2a; color: #aaa; font-size: 12px; padding: 4px 16px; border-radius: 12px; max-width: 90%; text-align: center; }
         .messages .msg .time { font-size: 10px; color: #888; margin-left: 8px; }
         .messages .msg .username { font-weight: bold; color: #e94560; font-size: 13px; }
-        .messages .msg .delete-msg-btn {
-            background: none;
-            border: none;
-            color: #888;
-            cursor: pointer;
-            font-size: 12px;
-            margin-left: 8px;
-            opacity: 0;
-            transition: 0.3s;
-        }
-        .messages .msg:hover .delete-msg-btn {
-            opacity: 1;
-        }
-        .messages .msg .delete-msg-btn:hover {
-            color: #e94560;
-        }
-        .messages .msg.self .delete-msg-btn {
-            opacity: 0.4;
-        }
-        .messages .msg.self:hover .delete-msg-btn {
-            opacity: 1;
-        }
         .input-area { display: flex; padding: 12px 24px; background: #0f3460; border-top: 1px solid #1a4a7a; gap: 10px; }
         .input-area input { flex: 1; padding: 10px 16px; border: none; border-radius: 8px; background: #1a2a4a; color: #eee; font-size: 14px; outline: none; }
         .input-area input::placeholder { color: #6688aa; }
@@ -90,7 +68,7 @@
     socket.emit('join', { room: currentRoom });
 
     socket.on('new_message', function(data) {
-        appendMessage(data.id, data.username, data.content, data.timestamp, data.username === username);
+        appendMessage(data.username, data.content, data.timestamp, data.username === username);
     });
 
     socket.on('system_message', function(data) {
@@ -113,22 +91,10 @@
         window.location.href = '/login';
     });
 
-    socket.on('message_deleted', function(data) {
-        const msgEl = document.querySelector(`.msg[data-msg-id="${data.id}"]`);
-        if (msgEl) msgEl.remove();
-    });
-
-    function appendMessage(msgId, sender, content, time, isSelf) {
+    function appendMessage(sender, content, time, isSelf) {
         const div = document.createElement('div');
         div.className = 'msg ' + (isSelf ? 'self' : 'other');
-        div.dataset.msgId = msgId;
-        
-        let deleteBtn = '';
-        if (isSelf || isAdmin) {
-            deleteBtn = `<button class="delete-msg-btn" onclick="deleteMessage(${msgId})" title="删除消息">✕</button>`;
-        }
-        
-        div.innerHTML = `<span class="username">${sender}</span> ${content} <span class="time">${time || ''}</span> ${deleteBtn}`;
+        div.innerHTML = `<span class="username">${sender}</span> ${content} <span class="time">${time || ''}</span>`;
         document.getElementById('messages').appendChild(div);
         scrollToBottom();
     }
@@ -168,29 +134,9 @@
             .then(res => res.json())
             .then(data => {
                 data.forEach(msg => {
-                    appendMessage(msg.id, msg.username, msg.content, msg.timestamp, msg.username === username);
+                    appendMessage(msg.username, msg.content, msg.timestamp, msg.username === username);
                 });
             });
-    }
-
-    function deleteMessage(msgId) {
-        if (!confirm('确认删除这条消息吗？')) return;
-        
-        fetch(`/api/delete_message/${msgId}`, {
-            method: 'DELETE'
-        })
-        .then(res => res.json())
-        .then(data => {
-            if (data.success) {
-                const msgEl = document.querySelector(`.msg[data-msg-id="${msgId}"]`);
-                if (msgEl) msgEl.remove();
-            } else {
-                alert('删除失败：' + (data.error || '未知错误'));
-            }
-        })
-        .catch(() => {
-            alert('网络错误，请重试');
-        });
     }
 
     function logout() {
@@ -202,7 +148,7 @@
         .then(res => res.json())
         .then(data => {
             data.forEach(msg => {
-                appendMessage(msg.id, msg.username, msg.content, msg.timestamp, msg.username === username);
+                appendMessage(msg.username, msg.content, msg.timestamp, msg.username === username);
             });
         });
 </script>
