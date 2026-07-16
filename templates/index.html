@@ -589,8 +589,7 @@
             });
 
             socket.on('clear_room', () => {
-                document.getElementById('messages').innerHTML = '';
-                addSystemMessage('💬 所有消息已被管理员清空');
+                // 清空消息功能已移除，此事件不会触发
             });
 
             socket.on('force_logout', () => {
