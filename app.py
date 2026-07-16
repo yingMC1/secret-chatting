@@ -1,7 +1,3 @@
-# 第一行必须放gevent补丁
-from gevent import monkey
-monkey.patch_all()
-
 # -*- coding: utf-8 -*-
 from flask import Flask, render_template, request, jsonify, session, redirect, url_for
 from flask_socketio import SocketIO, send, emit, join_room, leave_room
@@ -16,17 +12,20 @@ from flask_cors import CORS
 app = Flask(__name__)
 app.secret_key = 'your-secret-key-change-this-in-production'
 CORS(app)
-socketio = SocketIO(app, cors_allowed_origins="*", async_mode="gevent", logger=False, engineio_logger=False)
-# 关闭socketio日志，减少IO与内存开销
+# 单进程启动使用threading异步模式，无需猴子补丁，内存更低
+socketio = SocketIO(app, cors_allowed_origins="*", async_mode="threading", logger=False, engineio_logger=False)
 
+# ============ 数据库初始化 ============
 DB_PATH = 'chatroom.db'
 
 def init_db():
+    # 数据库存在则跳过初始化，避免锁冲突
     if os.path.exists(DB_PATH):
         return
     conn = sqlite3.connect(DB_PATH)
     c = conn.cursor()
-    # 建表语句不变
+    
+    # 用户表
     c.execute('''
         CREATE TABLE IF NOT EXISTS users (
             id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -37,6 +36,7 @@ def init_db():
             created_at TEXT DEFAULT CURRENT_TIMESTAMP
         )
     ''')
+    # 消息表
     c.execute('''
         CREATE TABLE IF NOT EXISTS messages (
             id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -46,6 +46,7 @@ def init_db():
             timestamp TEXT DEFAULT CURRENT_TIMESTAMP
         )
     ''')
+    # 房间表
     c.execute('''
         CREATE TABLE IF NOT EXISTS rooms (
             id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -54,23 +55,28 @@ def init_db():
             created_at TEXT DEFAULT CURRENT_TIMESTAMP
         )
     ''')
+    
+    # 默认管理员
     admin_pwd = hashlib.sha256('admin123'.encode()).hexdigest()
     try:
         c.execute('INSERT INTO users (username, password, is_admin) VALUES (?, ?, 1)', ('admin', admin_pwd))
     except:
         pass
+    # 默认房间
     try:
         c.execute('INSERT INTO rooms (room_name, created_by) VALUES (?, ?)', ('public', 'system'))
     except:
         pass
+    
     conn.commit()
     conn.close()
 
 init_db()
 
-# 每次请求新建独立连接，不使用全局连接
+# ============ 辅助函数 ============
 def get_db():
-    conn = sqlite3.connect(DB_PATH, timeout=10)
+    # 每次请求新建短连接，减少内存占用
+    conn = sqlite3.connect(DB_PATH, timeout=5)
     conn.row_factory = sqlite3.Row
     return conn
 
@@ -98,6 +104,7 @@ def admin_required(f):
         return f(*args, **kwargs)
     return decorated
 
+# ============ 路由 ============
 @app.route('/')
 def index():
     if 'user_id' not in session:
@@ -151,7 +158,7 @@ def logout():
     session.clear()
     return jsonify({'success': True})
 
-# 消息限制只加载50条，减少内存
+# 仅加载50条历史消息，降低内存
 @app.route('/api/messages/<room>')
 @login_required
 def get_messages(room):
@@ -191,6 +198,7 @@ def ban_user(user_id):
     return jsonify({'success': True})
 
 @app.route('/api/unban/<int:user_id>', methods=['POST'])
+@admin_required
 def unban_user(user_id):
     conn = get_db()
     conn.execute('UPDATE users SET is_banned = 0 WHERE id = ?', (user_id,))
@@ -222,7 +230,7 @@ def clear_messages(room):
 def admin_panel():
     return render_template('admin.html')
 
-# Socket事件
+# ============ SocketIO 事件 ============
 @socketio.on('join')
 def handle_join(data):
     room = data.get('room', 'public')
@@ -270,6 +278,7 @@ def handle_admin_message(data):
         content = data.get('content', '')
         emit('system_message', {'content': f'[管理员] {content}'}, room=room)
 
+# ============ 启动（读取Railway环境端口） ============
 if __name__ == '__main__':
     port = int(os.environ.get("PORT", 5000))
     socketio.run(app, host='0.0.0.0', port=port, debug=False)
