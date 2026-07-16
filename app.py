@@ -319,15 +319,13 @@ def revoke_admin(user_id):
         conn.close()
         return jsonify({'error': '该用户不是管理员'}), 400
 
-    # ===== 禁止撤销 yingMC =====
+    # ===== 禁止撤销 yingMC 的管理员权限 =====
     if user['username'] == 'yingMC':
         conn.close()
         return jsonify({'error': '❌ 不能撤销所有者 yingMC 的管理员权限'}), 400
 
-    # ===== 禁止撤销自己的管理员权限 =====
-    if user_id == session['user_id']:
-        conn.close()
-        return jsonify({'error': '❌ 不能撤销自己的管理员权限'}), 400
+    # ===== 允许管理员撤销自己的管理员权限 =====
+    # 移除了 user_id == session['user_id'] 的检查
 
     conn.execute('UPDATE users SET is_admin = 0 WHERE id = ?', (user_id,))
     conn.commit()
