@@ -116,6 +116,12 @@
         .btn-success:hover { background: #0f6b4a; }
         .btn-refresh { background: #2a65ff; color: #fff; }
         .btn-refresh:hover { background: #1a4fd6; }
+        .btn-primary { background: #2a65ff; color: #fff; }
+        .btn-primary:hover { background: #1a4fd6; }
+        .btn-warning { background: #f0a030; color: #fff; }
+        .btn-warning:hover { background: #d08820; }
+        .btn-delete { background: #cc3344; color: #fff; }
+        .btn-delete:hover { background: #aa2233; }
 
         .badge { padding: 2px 10px; border-radius: 12px; font-size: 11px; display: inline-block; }
         .badge-admin { background: #e94560; color: #fff; }
@@ -182,7 +188,6 @@
             flex-wrap: wrap;
         }
 
-        /* ===== Markdown + KaTeX 渲染样式 ===== */
         .msg-content { 
             max-width: 450px; 
             word-wrap: break-word; 
@@ -316,9 +321,10 @@
     let users = [];
     let messages = [];
     let currentAdmin = '';
+    let currentUserId = null;
 
     // ============================================================
-    //  安全函数：转义 HTML 特殊字符
+    //  安全函数
     // ============================================================
     function escapeHtml(text) {
         if (!text) return '';
@@ -328,16 +334,12 @@
     }
 
     // ============================================================
-    //  渲染 Markdown + KaTeX（安全版）
+    //  渲染 Markdown + KaTeX
     // ============================================================
     function renderMarkdown(text) {
         if (!text) return '';
         try {
-            // 第一步：先转义 HTML，防止 XSS
             let result = escapeHtml(text);
-            
-            // 第二步：处理 KaTeX 公式
-            // 处理 $$...$$ (块级公式)
             result = result.replace(/\$\$([\s\S]*?)\$\$/g, function(match, content) {
                 try {
                     return katex.renderToString(content.trim(), { 
@@ -349,8 +351,6 @@
                     return match;
                 }
             });
-            
-            // 处理 $...$ (行内公式)
             result = result.replace(/\$(?!\$)([^\$]+)\$(?!\$)/g, function(match, content) {
                 try {
                     return katex.renderToString(content.trim(), { 
@@ -362,15 +362,12 @@
                     return match;
                 }
             });
-            
-            // 第三步：渲染 Markdown（GFM 模式）
             const html = marked.parse(result, {
                 breaks: true,
                 gfm: true,
                 headerIds: false,
                 mangle: false
             });
-            
             return html;
         } catch(e) {
             console.error('渲染错误:', e);
@@ -405,20 +402,18 @@
     // ============================================================
     async function loadAll() {
         try {
-            const [usersRes, msgRes] = await Promise.all([
+            const [usersRes, msgRes, meRes] = await Promise.all([
                 fetch(`${API_BASE}/users`),
-                fetch(`${API_BASE}/messages/public`)
+                fetch(`${API_BASE}/messages/public`),
+                fetch(`${API_BASE}/me`)
             ]);
             if (usersRes.ok) users = await usersRes.json();
             if (msgRes.ok) messages = await msgRes.json();
-
-            try {
-                const meRes = await fetch(`${API_BASE}/me`);
-                if (meRes.ok) {
-                    const me = await meRes.json();
-                    currentAdmin = me.username || '管理员';
-                }
-            } catch(e) { currentAdmin = '管理员'; }
+            if (meRes.ok) {
+                const me = await meRes.json();
+                currentUserId = me.id;
+                currentAdmin = me.username || '管理员';
+            }
 
             renderAll();
         } catch (error) {
@@ -451,22 +446,41 @@
             tbody.innerHTML = '<tr><td colspan="6" class="empty">暂无用户</td></tr>';
             return;
         }
-        tbody.innerHTML = filtered.map(u => `
+        tbody.innerHTML = filtered.map(u => {
+            const isSelf = u.id === currentUserId;
+            return `
             <tr>
                 <td>${u.id || '-'}</td>
-                <td><strong>${escapeHtml(u.username || '未知')}</strong></td>
+                <td><strong>${escapeHtml(u.username || '未知')}</strong>${isSelf ? ' <span style="color:#66aaff;font-size:11px;">(我)</span>' : ''}</td>
                 <td>${u.is_admin ? '<span class="badge badge-admin">管理员</span>' : '普通用户'}</td>
                 <td>${u.is_banned ? '<span class="badge badge-banned">已封禁</span>' : '<span class="badge badge-normal">正常</span>'}</td>
                 <td>${escapeHtml(u.created_at || '-')}</td>
                 <td>
-                    ${u.is_admin ? '<span style="color:#888;">不可操作</span>' : 
-                      (u.is_banned ? 
-                        `<button class="btn btn-success" onclick="unbanUser(${u.id}, '${escapeHtml(u.username)}')">解封</button>` :
-                        `<button class="btn btn-danger" onclick="banUser(${u.id}, '${escapeHtml(u.username)}')">封禁</button>`
-                      )}
+                    <div style="display:flex;gap:4px;flex-wrap:wrap;">
+                        ${u.is_admin ? 
+                            (isSelf ? 
+                                '<span style="color:#888;font-size:11px;">不可操作自己</span>' :
+                                `<button class="btn btn-warning" onclick="revokeAdmin(${u.id}, '${escapeHtml(u.username)}')">撤销管理</button>`
+                            ) :
+                            (isSelf ? 
+                                '<span style="color:#888;font-size:11px;">不可操作自己</span>' :
+                                `<button class="btn btn-primary" onclick="makeAdmin(${u.id}, '${escapeHtml(u.username)}')">设为管理</button>`
+                            )
+                        }
+                        ${!u.is_admin && !isSelf ? 
+                            (u.is_banned ? 
+                                `<button class="btn btn-success" onclick="unbanUser(${u.id}, '${escapeHtml(u.username)}')">解封</button>` :
+                                `<button class="btn btn-danger" onclick="banUser(${u.id}, '${escapeHtml(u.username)}')">封禁</button>`
+                            ) : ''
+                        }
+                        ${!u.is_admin && !isSelf ? 
+                            `<button class="btn btn-delete" onclick="deleteUser(${u.id}, '${escapeHtml(u.username)}')">删除</button>` :
+                            ''
+                        }
+                    </div>
                 </td>
             </tr>
-        `).join('');
+        `}).join('');
     }
 
     function filterUsers() { renderUsers(); }
@@ -511,6 +525,7 @@
     //  操作函数
     // ============================================================
 
+    // ========== 封禁用户 ==========
     async function banUser(id, username) {
         if (!confirm(`确认封禁用户 "${username}"？`)) return;
         try {
@@ -527,6 +542,7 @@
         }
     }
 
+    // ========== 解封用户 ==========
     async function unbanUser(id, username) {
         try {
             const res = await fetch(`${API_BASE}/unban/${id}`, { method: 'POST' });
@@ -542,6 +558,58 @@
         }
     }
 
+    // ========== 设为管理员 ==========
+    async function makeAdmin(id, username) {
+        if (!confirm(`确认将用户 "${username}" 设为管理员？`)) return;
+        try {
+            const res = await fetch(`${API_BASE}/make_admin/${id}`, { method: 'POST' });
+            const data = await res.json();
+            if (data.success) {
+                showToast(`✅ 已授予 ${username} 管理员权限`, false, 'success');
+                setTimeout(loadAll, 500);
+            } else {
+                showToast('⚠️ 操作失败: ' + (data.error || '未知错误'), true);
+            }
+        } catch (e) {
+            showToast('⚠️ 请求失败', true);
+        }
+    }
+
+    // ========== 撤销管理员 ==========
+    async function revokeAdmin(id, username) {
+        if (!confirm(`确认撤销用户 "${username}" 的管理员权限？`)) return;
+        try {
+            const res = await fetch(`${API_BASE}/revoke_admin/${id}`, { method: 'POST' });
+            const data = await res.json();
+            if (data.success) {
+                showToast(`✅ 已撤销 ${username} 的管理员权限`, false, 'success');
+                setTimeout(loadAll, 500);
+            } else {
+                showToast('⚠️ 操作失败: ' + (data.error || '未知错误'), true);
+            }
+        } catch (e) {
+            showToast('⚠️ 请求失败', true);
+        }
+    }
+
+    // ========== 删除用户（管理员专用）==========
+    async function deleteUser(id, username) {
+        if (!confirm(`⚠️ 确认删除用户 "${username}"？\n此操作将同时删除该用户的所有消息，不可恢复！`)) return;
+        try {
+            const res = await fetch(`${API_BASE}/delete_user/${id}`, { method: 'DELETE' });
+            const data = await res.json();
+            if (data.success) {
+                showToast(`✅ 已删除用户：${username}`, false, 'success');
+                setTimeout(loadAll, 500);
+            } else {
+                showToast('⚠️ 删除失败: ' + (data.error || '未知错误'), true);
+            }
+        } catch (e) {
+            showToast('⚠️ 请求失败: ' + e.message, true);
+        }
+    }
+
+    // ========== 删除消息 ==========
     async function deleteMessage(id) {
         if (!confirm('确认删除该消息？此操作不可撤销！')) return;
         try {
