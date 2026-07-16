@@ -5,6 +5,11 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>聊天室</title>
     <script src="https://cdn.socket.io/4.5.0/socket.io.min.js"></script>
+    <!-- KaTeX -->
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/katex@0.16.9/dist/katex.min.css">
+    <script src="https://cdn.jsdelivr.net/npm/katex@0.16.9/dist/katex.min.js"></script>
+    <!-- Marked -->
+    <script src="https://cdn.jsdelivr.net/npm/marked@11.1.1/marked.min.js"></script>
     <style>
         * { margin: 0; padding: 0; box-sizing: border-box; }
         html, body {
@@ -114,7 +119,7 @@
             max-width: 75%;
             word-wrap: break-word;
             font-size: 14px;
-            line-height: 1.5;
+            line-height: 1.6;
         }
         .messages .msg.self { align-self: flex-end; background: #0f3460; }
         .messages .msg.other { align-self: flex-start; background: #2a2a4a; }
@@ -130,6 +135,53 @@
         }
         .messages .msg .time { font-size: 10px; color: #888; margin-left: 8px; }
         .messages .msg .username { font-weight: bold; color: #e94560; font-size: 13px; }
+
+        /* ===== Markdown + KaTeX 渲染样式 ===== */
+        .msg .content { 
+            display: inline-block;
+            max-width: 100%;
+        }
+        .msg .content p { margin: 2px 0; }
+        .msg .content strong { color: #fff; }
+        .msg .content em { color: #ddd; }
+        .msg .content code { 
+            background: rgba(255,255,255,0.1); 
+            padding: 1px 6px; 
+            border-radius: 4px; 
+            font-size: 12px; 
+            color: #e94560;
+            font-family: 'Consolas', monospace;
+        }
+        .msg .content pre { 
+            background: rgba(0,0,0,0.3); 
+            padding: 6px 10px; 
+            border-radius: 6px; 
+            overflow-x: auto; 
+            font-size: 12px;
+            margin: 4px 0;
+        }
+        .msg .content pre code { background: transparent; padding: 0; color: #aaddff; }
+        .msg .content blockquote { 
+            border-left: 3px solid #e94560; 
+            padding-left: 10px; 
+            margin: 2px 0;
+            color: #aaa; 
+        }
+        .msg .content .katex { font-size: 1.1em; }
+        .msg .content .katex-display { margin: 2px 0; }
+        .msg .content ul, .msg .content ol { padding-left: 18px; margin: 2px 0; }
+        .msg .content a { color: #66aaff; text-decoration: none; }
+        .msg .content a:hover { text-decoration: underline; }
+        .msg .content table { 
+            border-collapse: collapse; 
+            margin: 2px 0; 
+            font-size: 12px;
+        }
+        .msg .content table th, .msg .content table td { 
+            border: 1px solid #444; 
+            padding: 2px 6px; 
+        }
+        .msg .content img { max-width: 200px; border-radius: 4px; }
 
         .input-area {
             display: flex;
@@ -191,7 +243,7 @@
         </div>
         <div class="messages" id="messages"></div>
         <div class="input-area">
-            <input type="text" id="msgInput" placeholder="输入消息..." onkeydown="if(event.key==='Enter') sendMessage()">
+            <input type="text" id="msgInput" placeholder="支持 Markdown / KaTeX (如 $E=mc^2$)" onkeydown="if(event.key==='Enter') sendMessage()">
             <button onclick="sendMessage()">发送</button>
         </div>
     </div>
@@ -203,7 +255,7 @@
     const socket = io();
 
     // ============================================================
-    //  安全函数：转义 HTML 特殊字符，防止 XSS 攻击
+    //  安全函数：转义 HTML 特殊字符
     // ============================================================
     function escapeHtml(text) {
         if (!text) return '';
@@ -213,17 +265,63 @@
     }
 
     // ============================================================
-    //  渲染消息（纯文本，不支持 HTML）
+    //  渲染 Markdown + KaTeX（安全版）
+    // ============================================================
+    function renderMarkdown(text) {
+        if (!text) return '';
+        try {
+            // 第一步：先转义 HTML，防止 XSS
+            let result = escapeHtml(text);
+            
+            // 第二步：处理 KaTeX 公式
+            result = result.replace(/\$\$([\s\S]*?)\$\$/g, function(match, content) {
+                try {
+                    return katex.renderToString(content.trim(), { 
+                        displayMode: true, 
+                        throwOnError: false,
+                        trust: true
+                    });
+                } catch(e) {
+                    return match;
+                }
+            });
+            
+            result = result.replace(/\$(?!\$)([^\$]+)\$(?!\$)/g, function(match, content) {
+                try {
+                    return katex.renderToString(content.trim(), { 
+                        displayMode: false, 
+                        throwOnError: false,
+                        trust: true
+                    });
+                } catch(e) {
+                    return match;
+                }
+            });
+            
+            // 第三步：渲染 Markdown
+            return marked.parse(result, {
+                breaks: true,
+                gfm: true,
+                headerIds: false,
+                mangle: false
+            });
+        } catch(e) {
+            console.error('渲染错误:', e);
+            return escapeHtml(text);
+        }
+    }
+
+    // ============================================================
+    //  消息渲染
     // ============================================================
     socket.emit('join', { room: currentRoom });
 
     socket.on('new_message', function(data) {
         const isSelf = data.username === username;
-        // 对用户名和内容进行转义，防止 HTML 注入
         const safeUsername = escapeHtml(data.username);
-        const safeContent = escapeHtml(data.content);
+        const renderedContent = renderMarkdown(data.content);
         const safeTime = escapeHtml(data.timestamp || '');
-        appendMessage(safeUsername, safeContent, safeTime, isSelf);
+        appendMessage(safeUsername, renderedContent, safeTime, isSelf);
     });
 
     socket.on('system_message', function(data) {
@@ -248,11 +346,10 @@
         window.location.href = '/login';
     });
 
-    function appendMessage(sender, content, time, isSelf) {
+    function appendMessage(sender, contentHtml, time, isSelf) {
         const div = document.createElement('div');
         div.className = 'msg ' + (isSelf ? 'self' : 'other');
-        // 所有内容已经过转义，可以安全使用 innerHTML
-        div.innerHTML = `<span class="username">${sender}</span> ${content} <span class="time">${time}</span>`;
+        div.innerHTML = `<span class="username">${sender}</span> <span class="content">${contentHtml}</span> <span class="time">${time}</span>`;
         document.getElementById('messages').appendChild(div);
         scrollToBottom();
     }
@@ -260,7 +357,6 @@
     function appendSystemMessage(content) {
         const div = document.createElement('div');
         div.className = 'msg system';
-        // 系统消息也使用 textContent 确保安全
         div.textContent = content;
         document.getElementById('messages').appendChild(div);
         scrollToBottom();
@@ -294,9 +390,9 @@
             .then(data => {
                 data.forEach(msg => {
                     const safeUsername = escapeHtml(msg.username);
-                    const safeContent = escapeHtml(msg.content);
+                    const rendered = renderMarkdown(msg.content);
                     const safeTime = escapeHtml(msg.timestamp || '');
-                    appendMessage(safeUsername, safeContent, safeTime, msg.username === username);
+                    appendMessage(safeUsername, rendered, safeTime, msg.username === username);
                 });
             });
     }
@@ -323,9 +419,9 @@
         .then(data => {
             data.forEach(msg => {
                 const safeUsername = escapeHtml(msg.username);
-                const safeContent = escapeHtml(msg.content);
+                const rendered = renderMarkdown(msg.content);
                 const safeTime = escapeHtml(msg.timestamp || '');
-                appendMessage(safeUsername, safeContent, safeTime, msg.username === username);
+                appendMessage(safeUsername, rendered, safeTime, msg.username === username);
             });
         });
 </script>
