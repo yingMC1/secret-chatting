@@ -78,7 +78,7 @@ def init_db():
         )
     ''')
     
-    # 仅初始化 yingMC 为管理员，不再创建 admin 用户
+    # 仅初始化 yingMC 为管理员
     admin_pwd = hashlib.sha256('admin123'.encode()).hexdigest()
     try:
         c.execute('INSERT INTO users (username, password, is_admin) VALUES (?, ?, 1)', ('yingMC', admin_pwd))
@@ -92,7 +92,7 @@ def init_db():
     conn.commit()
     conn.close()
 
-# 执行数据库修复：删除admin，设置yingMC为唯一管理员
+# 执行数据库修复
 def fix_database():
     conn = sqlite3.connect(DB_PATH, timeout=15)
     c = conn.cursor()
@@ -307,6 +307,7 @@ def get_banlist():
     conn.close()
     return jsonify([dict(r) for r in items])
 
+# ===== 封禁用户（全局播报） =====
 @app.route('/api/ban/<int:user_id>', methods=['POST'])
 @login_required
 @owner_required
@@ -318,28 +319,51 @@ def ban_user(user_id):
         return jsonify({'error': '不能封禁自己'}), 400
     conn.execute('UPDATE users SET is_banned = 1 WHERE id = ?', (user_id,))
     conn.commit()
+    banned_user = conn.execute('SELECT username FROM users WHERE id = ?', (user_id,)).fetchone()
     conn.close()
+    
+    # 全局播报封禁消息
+    if banned_user:
+        socketio.emit('system_message', {'content': f'🚫 用户 "{banned_user["username"]}" 已被管理员封禁！'})
+        socketio.emit('user_banned', {'username': banned_user["username"]})
+    
     socketio.emit('force_logout', room=str(user_id))
     return jsonify({'success': True})
 
+# ===== 解封用户（全局播报） =====
 @app.route('/api/unban/<int:user_id>', methods=['POST'])
 @login_required
 @owner_required
 def unban_user(user_id):
     conn = get_db()
+    user = conn.execute('SELECT username FROM users WHERE id = ?', (user_id,)).fetchone()
     conn.execute('UPDATE users SET is_banned = 0 WHERE id = ?', (user_id,))
     conn.commit()
     conn.close()
+    
+    # 全局播报解封消息
+    if user:
+        socketio.emit('system_message', {'content': f'✅ 用户 "{user["username"]}" 已被管理员解封'})
+        socketio.emit('user_unbanned', {'username': user["username"]})
+    
     return jsonify({'success': True})
 
+# ===== 删除消息（全局播报） =====
 @app.route('/api/delete_message/<int:msg_id>', methods=['DELETE'])
 @login_required
 @owner_required
 def delete_message(msg_id):
     conn = get_db()
+    msg = conn.execute('SELECT username, content, room FROM messages WHERE id = ?', (msg_id,)).fetchone()
     conn.execute('DELETE FROM messages WHERE id = ?', (msg_id,))
     conn.commit()
     conn.close()
+    
+    # 全局播报删除消息
+    if msg:
+        socketio.emit('system_message', {'content': f'🗑️ 管理员删除了 "{msg["username"]}" 的消息'})
+        socketio.emit('message_deleted', {'id': msg_id, 'room': msg["room"]})
+    
     return jsonify({'success': True})
 
 @app.route('/api/clear_messages/<room>', methods=['DELETE'])
