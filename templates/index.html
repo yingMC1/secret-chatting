@@ -16,9 +16,6 @@
             background: #000;
         }
 
-        /* 【已移除故障遮罩与图片相关代码】 */
-
-        /* CSS强制全屏聊天容器，铺满整个浏览器，无边距/圆角/阴影 */
         .container {
             position: fixed;
             inset: 0;
@@ -59,7 +56,6 @@
             cursor: pointer;
             font-size: 13px;
         }
-        /* 全屏切换按钮 */
         .fullscreen-btn {
             background: #2a65ff;
             border: none;
@@ -170,9 +166,6 @@
     </style>
 </head>
 <body>
-    <!-- 已完全删除故障遮罩、img图片标签，无任何图片资源加载 -->
-
-    <!-- 全覆盖聊天窗口 -->
     <div class="container">
         <div class="header">
             <h2>💬 聊天室</h2>
@@ -282,7 +275,6 @@
             .then(() => { window.location.href = '/login'; });
     }
 
-    // 浏览器原生全屏切换函数
     function toggleFullScreen() {
         const docEl = document.documentElement;
         const fullState = document.fullscreenElement || document.webkitFullscreenElement || document.mozFullScreenElement || document.msFullscreenElement;
@@ -295,7 +287,6 @@
         }
     }
 
-    // 加载历史消息
     fetch(`/api/messages/public`)
         .then(res => res.json())
         .then(data => {
