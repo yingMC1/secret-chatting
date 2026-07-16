@@ -350,4 +350,4 @@ def handle_admin_message(data):
         emit('system_message', {'content': f'[管理员] {content}'}, room=room)
 
 if __name__ == '__main__':
-    socketio.run(app, host='0.0.0.0', port=5000, debug=False, async_mode='threading', allow_unsafe_werkzeug=True)
+    socketio.run(app, host='0.0.0.0', port=5000, debug=True, async_mode='threading')
