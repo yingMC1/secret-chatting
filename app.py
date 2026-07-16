@@ -29,7 +29,7 @@ def init_db():
     conn = sqlite3.connect(DB_PATH)
     c = conn.cursor()
 
-    # 用户表（增加 device_id 字段）
+    # --- 用户表（基础字段） ---
     c.execute('''
         CREATE TABLE IF NOT EXISTS users (
             id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -37,12 +37,16 @@ def init_db():
             password TEXT NOT NULL,
             is_admin INTEGER DEFAULT 0,
             is_banned INTEGER DEFAULT 0,
-            device_id TEXT,
             created_at TEXT DEFAULT CURRENT_TIMESTAMP
         )
     ''')
+    # 安全添加 device_id 列（如果不存在）
+    try:
+        c.execute('ALTER TABLE users ADD COLUMN device_id TEXT')
+    except sqlite3.OperationalError:
+        pass  # 列已存在
 
-    # 消息表
+    # --- 消息表 ---
     c.execute('''
         CREATE TABLE IF NOT EXISTS messages (
             id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -53,7 +57,7 @@ def init_db():
         )
     ''')
 
-    # 房间表
+    # --- 房间表 ---
     c.execute('''
         CREATE TABLE IF NOT EXISTS rooms (
             id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -63,7 +67,7 @@ def init_db():
         )
     ''')
 
-    # 被封禁的设备ID黑名单
+    # --- 被封禁设备表 ---
     c.execute('''
         CREATE TABLE IF NOT EXISTS banned_devices (
             id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -72,7 +76,7 @@ def init_db():
         )
     ''')
 
-    # 初始化 yingMC
+    # --- 初始化 yingMC ---
     admin_pwd = hashlib.sha256('ying@akioi&1101'.encode()).hexdigest()
     c.execute('''
         INSERT OR REPLACE INTO users (username, password, is_admin, is_banned, device_id) 
@@ -205,7 +209,7 @@ def register():
     data = request.get_json()
     username = data.get('username')
     password = hash_password(data.get('password', ''))
-    device_id = data.get('device_id')   # 由前端生成并存储
+    device_id = data.get('device_id')
 
     if username == 'yingMC':
         return jsonify({'error': '该用户名已被保留'}), 400
@@ -213,8 +217,8 @@ def register():
     if not device_id:
         return jsonify({'error': '设备标识缺失，请启用Cookie'}), 400
 
-    # 检查设备是否在黑名单
     conn = get_db()
+    # 检查设备是否在黑名单
     banned = conn.execute('SELECT id FROM banned_devices WHERE device_id = ?', (device_id,)).fetchone()
     if banned:
         conn.close()
