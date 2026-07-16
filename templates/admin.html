@@ -5,21 +5,14 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>👑 管理面板 - 聊天室</title>
     <style>
-        * {
-            margin: 0;
-            padding: 0;
-            box-sizing: border-box;
-        }
+        * { margin: 0; padding: 0; box-sizing: border-box; }
         body {
             font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
             background: #1a1a2e;
             min-height: 100vh;
             padding: 20px;
         }
-        .container {
-            max-width: 1200px;
-            margin: 0 auto;
-        }
+        .container { max-width: 1200px; margin: 0 auto; }
         .header {
             background: #0f3460;
             padding: 20px 30px;
@@ -33,17 +26,9 @@
             margin-bottom: 30px;
             border-bottom: 3px solid #e94560;
         }
-        .header h1 {
-            font-size: 24px;
-        }
-        .header h1 span {
-            color: #e94560;
-        }
-        .header-actions {
-            display: flex;
-            gap: 12px;
-            flex-wrap: wrap;
-        }
+        .header h1 { font-size: 24px; }
+        .header h1 span { color: #e94560; }
+        .header-actions { display: flex; gap: 12px; flex-wrap: wrap; }
         .btn {
             padding: 8px 20px;
             border: none;
@@ -55,49 +40,19 @@
             text-decoration: none;
             display: inline-block;
         }
-        .btn-back {
-            background: #2d4059;
-            color: white;
-        }
-        .btn-back:hover {
-            background: #3d5070;
-        }
-        .btn-danger {
-            background: #e94560;
-            color: white;
-        }
-        .btn-danger:hover {
-            background: #ff6b81;
-            transform: scale(1.05);
-        }
-        .btn-success {
-            background: #2ecc71;
-            color: white;
-        }
-        .btn-success:hover {
-            background: #3ddc84;
-            transform: scale(1.05);
-        }
-        .btn-warning {
-            background: #f5a623;
-            color: #1a1a2e;
-        }
-        .btn-warning:hover {
-            background: #ffc107;
-            transform: scale(1.05);
-        }
-        .btn-info {
-            background: #3498db;
-            color: white;
-        }
-        .btn-info:hover {
-            background: #5bade3;
-            transform: scale(1.05);
-        }
-        .btn-sm {
-            padding: 4px 12px;
-            font-size: 12px;
-        }
+        .btn-back { background: #2d4059; color: white; }
+        .btn-back:hover { background: #3d5070; }
+        .btn-danger { background: #e94560; color: white; }
+        .btn-danger:hover { background: #ff6b81; transform: scale(1.05); }
+        .btn-danger:disabled { background: #555; cursor: not-allowed; transform: none; }
+        .btn-success { background: #2ecc71; color: white; }
+        .btn-success:hover { background: #3ddc84; transform: scale(1.05); }
+        .btn-warning { background: #f5a623; color: #1a1a2e; }
+        .btn-warning:hover { background: #ffc107; transform: scale(1.05); }
+        .btn-info { background: #3498db; color: white; }
+        .btn-info:hover { background: #5bade3; transform: scale(1.05); }
+        .btn-sm { padding: 4px 12px; font-size: 12px; }
+        .btn:disabled { opacity: 0.5; cursor: not-allowed; transform: none !important; }
         .stats {
             display: grid;
             grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
@@ -112,16 +67,8 @@
             text-align: center;
             border: 1px solid #2d4059;
         }
-        .stat-card .number {
-            font-size: 28px;
-            font-weight: bold;
-            color: #e94560;
-        }
-        .stat-card .label {
-            font-size: 13px;
-            color: #8a9aaa;
-            margin-top: 5px;
-        }
+        .stat-card .number { font-size: 28px; font-weight: bold; color: #e94560; }
+        .stat-card .label { font-size: 13px; color: #8a9aaa; margin-top: 5px; }
         .panel {
             background: #16213e;
             border-radius: 15px;
@@ -147,10 +94,7 @@
             border-radius: 12px;
             font-size: 13px;
         }
-        .table-wrapper {
-            overflow-x: auto;
-            padding: 5px;
-        }
+        .table-wrapper { overflow-x: auto; padding: 5px; }
         table {
             width: 100%;
             border-collapse: collapse;
@@ -171,9 +115,7 @@
             border-bottom: 1px solid #2d4059;
             vertical-align: middle;
         }
-        tr:hover td {
-            background: #1a2a4a;
-        }
+        tr:hover td { background: #1a2a4a; }
         .status-badge {
             padding: 3px 12px;
             border-radius: 12px;
@@ -181,40 +123,14 @@
             font-weight: bold;
             display: inline-block;
         }
-        .status-admin {
-            background: #f5a623;
-            color: #1a1a2e;
-        }
-        .status-owner {
-            background: #e94560;
-            color: white;
-        }
-        .status-user {
-            background: #2d4059;
-            color: #8a9aaa;
-        }
-        .status-banned {
-            background: #e74c3c;
-            color: white;
-        }
-        .status-active {
-            background: #2ecc71;
-            color: white;
-        }
-        .actions {
-            display: flex;
-            gap: 5px;
-            flex-wrap: wrap;
-        }
-        .empty-state {
-            text-align: center;
-            padding: 40px 20px;
-            color: #8a9aaa;
-        }
-        .empty-state .icon {
-            font-size: 48px;
-            margin-bottom: 15px;
-        }
+        .status-owner { background: #e94560; color: white; }
+        .status-admin { background: #f5a623; color: #1a1a2e; }
+        .status-user { background: #2d4059; color: #8a9aaa; }
+        .status-banned { background: #e74c3c; color: white; }
+        .status-active { background: #2ecc71; color: white; }
+        .actions { display: flex; gap: 5px; flex-wrap: wrap; }
+        .empty-state { text-align: center; padding: 40px 20px; color: #8a9aaa; }
+        .empty-state .icon { font-size: 48px; margin-bottom: 15px; }
         .toast {
             position: fixed;
             top: 20px;
@@ -227,44 +143,24 @@
             animation: slideIn 0.3s ease;
             max-width: 400px;
         }
-        .toast-success {
-            background: #2ecc71;
-        }
-        .toast-error {
-            background: #e74c3c;
-        }
-        .toast-info {
-            background: #3498db;
-        }
+        .toast-success { background: #2ecc71; }
+        .toast-error { background: #e74c3c; }
+        .toast-info { background: #3498db; }
         @keyframes slideIn {
             from { transform: translateX(100%); opacity: 0; }
             to { transform: translateX(0); opacity: 1; }
         }
         @media (max-width: 768px) {
-            .header {
-                padding: 15px 20px;
-            }
-            .header h1 {
-                font-size: 18px;
-            }
-            th, td {
-                padding: 8px 10px;
-                font-size: 12px;
-            }
-            .actions {
-                flex-direction: column;
-                gap: 3px;
-            }
-            .btn-sm {
-                padding: 3px 8px;
-                font-size: 11px;
-            }
+            .header { padding: 15px 20px; }
+            .header h1 { font-size: 18px; }
+            th, td { padding: 8px 10px; font-size: 12px; }
+            .actions { flex-direction: column; gap: 3px; }
+            .btn-sm { padding: 3px 8px; font-size: 11px; }
         }
     </style>
 </head>
 <body>
     <div class="container">
-        <!-- 头部 -->
         <div class="header">
             <h1>👑 <span>管理面板</span></h1>
             <div class="header-actions">
@@ -273,27 +169,13 @@
             </div>
         </div>
 
-        <!-- 统计 -->
         <div class="stats" id="stats">
-            <div class="stat-card">
-                <div class="number" id="totalUsers">0</div>
-                <div class="label">总用户</div>
-            </div>
-            <div class="stat-card">
-                <div class="number" id="onlineUsers">0</div>
-                <div class="label">在线用户</div>
-            </div>
-            <div class="stat-card">
-                <div class="number" id="adminUsers">0</div>
-                <div class="label">管理员</div>
-            </div>
-            <div class="stat-card">
-                <div class="number" id="bannedUsers">0</div>
-                <div class="label">已封禁</div>
-            </div>
+            <div class="stat-card"><div class="number" id="totalUsers">0</div><div class="label">总用户</div></div>
+            <div class="stat-card"><div class="number" id="onlineUsers">0</div><div class="label">在线用户</div></div>
+            <div class="stat-card"><div class="number" id="adminUsers">0</div><div class="label">管理员</div></div>
+            <div class="stat-card"><div class="number" id="bannedUsers">0</div><div class="label">已封禁</div></div>
         </div>
 
-        <!-- 用户列表 -->
         <div class="panel">
             <div class="panel-header">
                 <span>👥 用户管理</span>
@@ -301,29 +183,12 @@
             </div>
             <div class="table-wrapper">
                 <table>
-                    <thead>
-                        <tr>
-                            <th>ID</th>
-                            <th>用户名</th>
-                            <th>角色</th>
-                            <th>状态</th>
-                            <th>注册时间</th>
-                            <th>操作</th>
-                        </tr>
-                    </thead>
-                    <tbody id="userTableBody">
-                        <tr>
-                            <td colspan="6" class="empty-state">
-                                <div class="icon">⏳</div>
-                                <p>加载中...</p>
-                            </td>
-                        </tr>
-                    </tbody>
+                    <thead><tr><th>ID</th><th>用户名</th><th>角色</th><th>状态</th><th>注册时间</th><th>操作</th></tr></thead>
+                    <tbody id="userTableBody"><tr><td colspan="6" class="empty-state"><div class="icon">⏳</div><p>加载中...</p></td></tr></tbody>
                 </table>
             </div>
         </div>
 
-        <!-- 消息管理 -->
         <div class="panel">
             <div class="panel-header">
                 <span>💬 消息管理</span>
@@ -335,184 +200,124 @@
             </div>
             <div class="table-wrapper">
                 <table>
-                    <thead>
-                        <tr>
-                            <th>ID</th>
-                            <th>用户</th>
-                            <th>内容</th>
-                            <th>时间</th>
-                            <th>操作</th>
-                        </tr>
-                    </thead>
-                    <tbody id="messageTableBody">
-                        <tr>
-                            <td colspan="5" class="empty-state">
-                                <div class="icon">💬</div>
-                                <p>暂无消息</p>
-                            </td>
-                        </tr>
-                    </tbody>
+                    <thead><tr><th>ID</th><th>用户</th><th>内容</th><th>时间</th><th>操作</th></tr></thead>
+                    <tbody id="messageTableBody"><tr><td colspan="5" class="empty-state"><div class="icon">💬</div><p>暂无消息</p></td></tr></tbody>
                 </table>
             </div>
         </div>
     </div>
 
     <script>
-        // ========== 加载用户列表 ==========
+        let currentUsername = '';
+
         function loadUsers() {
             fetch('/api/users', { credentials: 'include' })
                 .then(r => {
-                    if (r.status === 403) {
-                        window.location.href = '/';
-                        return;
-                    }
+                    if (r.status === 403) { window.location.href = '/'; return; }
                     return r.json();
                 })
                 .then(data => {
                     if (!data) return;
                     const tbody = document.getElementById('userTableBody');
-                    
                     if (data.length === 0) {
-                        tbody.innerHTML = `
-                            <tr>
-                                <td colspan="6" class="empty-state">
-                                    <div class="icon">👻</div>
-                                    <p>暂无用户</p>
-                                </td>
-                            </tr>
-                        `;
+                        tbody.innerHTML = `<tr><td colspan="6" class="empty-state"><div class="icon">👻</div><p>暂无用户</p></td></tr>`;
                         return;
                     }
 
-                    let html = '';
-                    let total = 0, admins = 0, banned = 0;
+                    // 获取当前用户名
+                    fetch('/api/me', { credentials: 'include' })
+                        .then(r => r.json())
+                        .then(me => { if (me.username) currentUsername = me.username; })
+                        .catch(() => {});
+
+                    let html = '', total = 0, admins = 0, banned = 0;
                     
                     data.forEach(user => {
                         total++;
                         if (user.is_admin) admins++;
                         if (user.is_banned) banned++;
                         
-                        // 判断角色
-                        let roleBadge = '';
-                        if (user.username === 'yingMC') {
-                            roleBadge = '<span class="status-badge status-owner">👑 所有者</span>';
-                        } else if (user.is_admin) {
-                            roleBadge = '<span class="status-badge status-admin">⭐ 管理员</span>';
-                        } else {
-                            roleBadge = '<span class="status-badge status-user">👤 用户</span>';
-                        }
-                        
-                        // 判断状态
-                        let statusBadge = user.is_banned 
-                            ? '<span class="status-badge status-banned">🚫 已封禁</span>'
-                            : '<span class="status-badge status-active">✅ 正常</span>';
-                        
-                        // 操作按钮
-                        let actions = '';
                         const isOwner = user.username === 'yingMC';
-                        const isSelf = user.id === parseInt(document.querySelector('[data-user-id]')?.dataset?.userId || '0');
+                        const isSelf = user.username === currentUsername;
                         
-                        if (!isOwner) {
+                        let roleBadge = isOwner ? '<span class="status-badge status-owner">👑 所有者</span>' :
+                                       user.is_admin ? '<span class="status-badge status-admin">⭐ 管理员</span>' :
+                                       '<span class="status-badge status-user">👤 用户</span>';
+                        
+                        let statusBadge = user.is_banned ? '<span class="status-badge status-banned">🚫 已封禁</span>' :
+                                                          '<span class="status-badge status-active">✅ 正常</span>';
+                        
+                        let actions = '';
+                        if (isOwner) {
+                            actions = '<span style="color:#e94560;font-size:12px;font-weight:bold;">🔒 不可操作</span>';
+                        } else if (isSelf) {
+                            actions = '<span style="color:#8a9aaa;font-size:12px;">👤 自己</span>';
+                        } else {
                             if (user.is_banned) {
                                 actions += `<button class="btn btn-success btn-sm" onclick="unbanUser(${user.id})">解封</button>`;
                             } else {
                                 actions += `<button class="btn btn-danger btn-sm" onclick="banUser(${user.id})">封禁</button>`;
                             }
-                            
                             if (!user.is_admin) {
                                 actions += `<button class="btn btn-warning btn-sm" onclick="makeAdmin(${user.id})">设为管理</button>`;
                             } else {
                                 actions += `<button class="btn btn-info btn-sm" onclick="revokeAdmin(${user.id})">撤销管理</button>`;
                             }
-                            
                             actions += `<button class="btn btn-danger btn-sm" onclick="deleteUser(${user.id})">删除</button>`;
-                        } else {
-                            actions = '<span style="color:#8a9aaa;font-size:12px;">不可操作</span>';
                         }
                         
-                        html += `
-                            <tr>
-                                <td>${user.id}</td>
-                                <td><strong>${escapeHtml(user.username)}</strong></td>
-                                <td>${roleBadge}</td>
-                                <td>${statusBadge}</td>
-                                <td>${user.created_at ? new Date(user.created_at).toLocaleString('zh-CN') : '-'}</td>
-                                <td class="actions">${actions}</td>
-                            </tr>
-                        `;
+                        html += `<tr>
+                            <td>${user.id}</td>
+                            <td><strong>${escapeHtml(user.username)}</strong></td>
+                            <td>${roleBadge}</td>
+                            <td>${statusBadge}</td>
+                            <td>${user.created_at ? new Date(user.created_at).toLocaleString('zh-CN') : '-'}</td>
+                            <td class="actions">${actions}</td>
+                        </tr>`;
                     });
                     
                     tbody.innerHTML = html;
-                    
-                    // 更新统计
                     document.getElementById('totalUsers').textContent = total;
                     document.getElementById('adminUsers').textContent = admins;
                     document.getElementById('bannedUsers').textContent = banned;
                     document.getElementById('userCount').textContent = `${total} 个用户`;
                 })
                 .catch(err => {
-                    console.error('加载用户失败:', err);
-                    document.getElementById('userTableBody').innerHTML = `
-                        <tr>
-                            <td colspan="6" class="empty-state">
-                                <div class="icon">❌</div>
-                                <p>加载失败，请刷新重试</p>
-                            </td>
-                        </tr>
-                    `;
+                    document.getElementById('userTableBody').innerHTML = 
+                        `<tr><td colspan="6" class="empty-state"><div class="icon">❌</div><p>加载失败，请刷新重试</p></td></tr>`;
                 });
         }
 
-        // ========== 加载在线人数 ==========
         function loadOnlineCount() {
             fetch('/api/online_count', { credentials: 'include' })
                 .then(r => r.json())
-                .then(data => {
-                    document.getElementById('onlineUsers').textContent = data.count || 0;
-                })
+                .then(data => { document.getElementById('onlineUsers').textContent = data.count || 0; })
                 .catch(() => {});
         }
 
-        // ========== 加载消息列表 ==========
         function loadMessages() {
             fetch('/api/messages/public', { credentials: 'include' })
                 .then(r => r.json())
                 .then(data => {
                     const tbody = document.getElementById('messageTableBody');
-                    
                     if (!data || data.length === 0) {
-                        tbody.innerHTML = `
-                            <tr>
-                                <td colspan="5" class="empty-state">
-                                    <div class="icon">💬</div>
-                                    <p>暂无消息</p>
-                                </td>
-                            </tr>
-                        `;
+                        tbody.innerHTML = `<tr><td colspan="5" class="empty-state"><div class="icon">💬</div><p>暂无消息</p></td></tr>`;
                         return;
                     }
-                    
-                    // 显示最新的20条
                     const recent = data.slice(-20).reverse();
                     let html = '';
                     recent.forEach(msg => {
-                        html += `
-                            <tr>
-                                <td>${msg.id}</td>
-                                <td><strong>${escapeHtml(msg.username)}</strong></td>
-                                <td style="max-width:300px;word-break:break-all;">${escapeHtml(msg.content)}</td>
-                                <td>${msg.timestamp ? new Date(msg.timestamp).toLocaleString('zh-CN') : '-'}</td>
-                                <td>
-                                    <button class="btn btn-danger btn-sm" onclick="deleteMessage(${msg.id})">删除</button>
-                                </td>
-                            </tr>
-                        `;
+                        html += `<tr>
+                            <td>${msg.id}</td>
+                            <td><strong>${escapeHtml(msg.username)}</strong></td>
+                            <td style="max-width:300px;word-break:break-all;white-space:pre-wrap;">${escapeHtml(msg.content)}</td>
+                            <td>${msg.timestamp ? new Date(msg.timestamp).toLocaleString('zh-CN') : '-'}</td>
+                            <td><button class="btn btn-danger btn-sm" onclick="deleteMessage(${msg.id})">删除</button></td>
+                        </tr>`;
                     });
                     tbody.innerHTML = html;
                 })
-                .catch(err => {
-                    console.error('加载消息失败:', err);
-                });
+                .catch(err => console.error('加载消息失败:', err));
         }
 
         // ========== 用户操作 ==========
@@ -521,12 +326,8 @@
             fetch(`/api/ban/${userId}`, { method: 'POST', credentials: 'include' })
                 .then(r => r.json())
                 .then(data => {
-                    if (data.success) {
-                        showToast('✅ 用户已封禁', 'success');
-                        refreshData();
-                    } else {
-                        showToast('❌ ' + (data.error || '封禁失败'), 'error');
-                    }
+                    if (data.success) { showToast('✅ 用户已封禁', 'success'); refreshData(); }
+                    else { showToast('❌ ' + (data.error || '封禁失败'), 'error'); }
                 })
                 .catch(() => showToast('❌ 请求失败', 'error'));
         }
@@ -536,12 +337,8 @@
             fetch(`/api/unban/${userId}`, { method: 'POST', credentials: 'include' })
                 .then(r => r.json())
                 .then(data => {
-                    if (data.success) {
-                        showToast('✅ 用户已解封', 'success');
-                        refreshData();
-                    } else {
-                        showToast('❌ ' + (data.error || '解封失败'), 'error');
-                    }
+                    if (data.success) { showToast('✅ 用户已解封', 'success'); refreshData(); }
+                    else { showToast('❌ ' + (data.error || '解封失败'), 'error'); }
                 })
                 .catch(() => showToast('❌ 请求失败', 'error'));
         }
@@ -551,27 +348,19 @@
             fetch(`/api/make_admin/${userId}`, { method: 'POST', credentials: 'include' })
                 .then(r => r.json())
                 .then(data => {
-                    if (data.success) {
-                        showToast(`✅ ${data.username} 已成为管理员`, 'success');
-                        refreshData();
-                    } else {
-                        showToast('❌ ' + (data.error || '操作失败'), 'error');
-                    }
+                    if (data.success) { showToast(`✅ ${data.username} 已成为管理员`, 'success'); refreshData(); }
+                    else { showToast('❌ ' + (data.error || '操作失败'), 'error'); }
                 })
                 .catch(() => showToast('❌ 请求失败', 'error'));
         }
 
         function revokeAdmin(userId) {
-            if (!confirm('确定要撤销该用户的管理员权限吗？')) return;
+            if (!confirm('⚠️ 确定要撤销该用户的管理员权限吗？')) return;
             fetch(`/api/revoke_admin/${userId}`, { method: 'POST', credentials: 'include' })
                 .then(r => r.json())
                 .then(data => {
-                    if (data.success) {
-                        showToast(`✅ ${data.username} 的管理员权限已撤销`, 'success');
-                        refreshData();
-                    } else {
-                        showToast('❌ ' + (data.error || '操作失败'), 'error');
-                    }
+                    if (data.success) { showToast(`✅ ${data.username} 的管理员权限已撤销`, 'success'); refreshData(); }
+                    else { showToast('❌ ' + (data.error || '操作失败'), 'error'); }
                 })
                 .catch(() => showToast('❌ 请求失败', 'error'));
         }
@@ -581,12 +370,8 @@
             fetch(`/api/delete_user/${userId}`, { method: 'DELETE', credentials: 'include' })
                 .then(r => r.json())
                 .then(data => {
-                    if (data.success) {
-                        showToast(`✅ 用户 ${data.username} 已删除`, 'success');
-                        refreshData();
-                    } else {
-                        showToast('❌ ' + (data.error || '删除失败'), 'error');
-                    }
+                    if (data.success) { showToast(`✅ 用户 ${data.username} 已删除`, 'success'); refreshData(); }
+                    else { showToast('❌ ' + (data.error || '删除失败'), 'error'); }
                 })
                 .catch(() => showToast('❌ 请求失败', 'error'));
         }
@@ -596,12 +381,8 @@
             fetch(`/api/delete_message/${msgId}`, { method: 'DELETE', credentials: 'include' })
                 .then(r => r.json())
                 .then(data => {
-                    if (data.success) {
-                        showToast('✅ 消息已删除', 'success');
-                        loadMessages();
-                    } else {
-                        showToast('❌ ' + (data.error || '删除失败'), 'error');
-                    }
+                    if (data.success) { showToast('✅ 消息已删除', 'success'); loadMessages(); }
+                    else { showToast('❌ ' + (data.error || '删除失败'), 'error'); }
                 })
                 .catch(() => showToast('❌ 请求失败', 'error'));
         }
@@ -611,38 +392,22 @@
             fetch('/api/clear_messages/public', { method: 'DELETE', credentials: 'include' })
                 .then(r => r.json())
                 .then(data => {
-                    if (data.success) {
-                        showToast('✅ 所有消息已清空', 'success');
-                        loadMessages();
-                    } else {
-                        showToast('❌ ' + (data.error || '清空失败'), 'error');
-                    }
+                    if (data.success) { showToast('✅ 所有消息已清空', 'success'); loadMessages(); }
+                    else { showToast('❌ ' + (data.error || '清空失败'), 'error'); }
                 })
                 .catch(() => showToast('❌ 请求失败', 'error'));
         }
 
-        // ========== 刷新 ==========
-        function refreshData() {
-            loadUsers();
-            loadOnlineCount();
-            showToast('🔄 数据已刷新', 'info');
-        }
+        function refreshData() { loadUsers(); loadOnlineCount(); showToast('🔄 数据已刷新', 'info'); }
+        function refreshMessages() { loadMessages(); showToast('🔄 消息已刷新', 'info'); }
 
-        function refreshMessages() {
-            loadMessages();
-            showToast('🔄 消息已刷新', 'info');
-        }
-
-        // ========== Toast 提示 ==========
         function showToast(message, type = 'info') {
             const existing = document.querySelector('.toast');
             if (existing) existing.remove();
-            
             const toast = document.createElement('div');
             toast.className = `toast toast-${type}`;
             toast.textContent = message;
             document.body.appendChild(toast);
-            
             setTimeout(() => {
                 toast.style.opacity = '0';
                 toast.style.transition = 'opacity 0.3s';
@@ -650,7 +415,6 @@
             }, 3000);
         }
 
-        // ========== 工具函数 ==========
         function escapeHtml(text) {
             if (!text) return '';
             const div = document.createElement('div');
@@ -658,11 +422,7 @@
             return div.innerHTML;
         }
 
-        // ========== 自动刷新 ==========
-        // 每30秒自动刷新
         setInterval(refreshData, 30000);
-
-        // ========== 启动 ==========
         refreshData();
         loadMessages();
     </script>
