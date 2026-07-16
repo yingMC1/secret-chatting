@@ -12,8 +12,6 @@
     <script src="https://cdn.jsdelivr.net/npm/marked@11.1.1/marked.min.js"></script>
     <!-- KaTeX 渲染库 -->
     <script src="https://cdn.jsdelivr.net/npm/katex@0.16.9/dist/katex.min.js"></script>
-    <!-- 自动渲染 KaTeX -->
-    <script src="https://cdn.jsdelivr.net/npm/katex@0.16.9/dist/contrib/auto-render.min.js"></script>
     
     <script src="https://cdn.socket.io/4.5.0/socket.io.min.js"></script>
     <style>
@@ -171,6 +169,10 @@
         .message .msg-username {
             font-weight: bold;
             color: #f5a623;
+            cursor: pointer;
+        }
+        .message .msg-username:hover {
+            text-decoration: underline;
         }
         .message.own .msg-username {
             color: #ffe066;
@@ -181,7 +183,9 @@
         }
         .message .msg-content {
             font-size: 15px;
-            line-height: 1.6;
+            line-height: 1.8;
+            white-space: pre-wrap;
+            word-wrap: break-word;
         }
         /* Markdown 样式 */
         .message .msg-content p {
@@ -200,6 +204,7 @@
             border-radius: 8px;
             overflow-x: auto;
             margin: 6px 0;
+            white-space: pre-wrap;
         }
         .message .msg-content pre code {
             background: none;
@@ -240,6 +245,14 @@
             max-width: 100%;
             border-radius: 8px;
         }
+        /* @提及高亮 */
+        .message .msg-content .mention {
+            color: #f5a623;
+            background: rgba(245, 166, 35, 0.2);
+            padding: 1px 4px;
+            border-radius: 4px;
+            font-weight: bold;
+        }
         /* KaTeX 样式 */
         .message .msg-content .katex-display {
             margin: 8px 0;
@@ -266,9 +279,15 @@
             border-top: 1px solid #2d4059;
             display: flex;
             gap: 12px;
+            flex-wrap: wrap;
+        }
+        .input-area .input-wrapper {
+            flex: 1;
+            position: relative;
+            min-width: 150px;
         }
         .input-area input {
-            flex: 1;
+            width: 100%;
             padding: 12px 20px;
             border: none;
             border-radius: 25px;
@@ -305,6 +324,32 @@
             cursor: not-allowed;
             transform: none;
         }
+        /* @提示下拉 */
+        .mention-suggest {
+            position: absolute;
+            bottom: 100%;
+            left: 0;
+            background: #0f3460;
+            border-radius: 12px;
+            padding: 8px 0;
+            min-width: 150px;
+            max-height: 150px;
+            overflow-y: auto;
+            display: none;
+            box-shadow: 0 10px 30px rgba(0,0,0,0.5);
+            z-index: 100;
+            border: 1px solid #2d4059;
+        }
+        .mention-suggest .suggest-item {
+            padding: 8px 16px;
+            color: white;
+            cursor: pointer;
+            transition: background 0.2s;
+        }
+        .mention-suggest .suggest-item:hover,
+        .mention-suggest .suggest-item.active {
+            background: #e94560;
+        }
         .room-info {
             background: #0f3460;
             padding: 8px 25px;
@@ -331,9 +376,9 @@
             padding: 4px 25px 10px 25px;
             background: #16213e;
             border-top: 1px solid #0f3460;
-        }
-        .format-hint span {
-            margin-right: 12px;
+            display: flex;
+            flex-wrap: wrap;
+            gap: 6px 12px;
         }
         .format-hint code {
             background: #0f3460;
@@ -341,6 +386,9 @@
             border-radius: 4px;
             font-size: 12px;
             color: #e94560;
+        }
+        .format-hint .key {
+            color: #5bade3;
         }
         @media (max-width: 600px) {
             .chat-container {
@@ -358,7 +406,6 @@
             }
             .input-area {
                 padding: 12px 15px;
-                flex-wrap: wrap;
             }
             .input-area input {
                 font-size: 14px;
@@ -367,7 +414,6 @@
             .input-area button {
                 padding: 10px 20px;
                 font-size: 14px;
-                flex: 1;
             }
             .header-right {
                 gap: 8px;
@@ -376,11 +422,11 @@
                 font-size: 11px;
                 padding: 4px 15px 8px 15px;
             }
-            .format-hint span {
-                margin-right: 8px;
-            }
             .message {
                 max-width: 90%;
+            }
+            .input-area .input-wrapper {
+                min-width: 120px;
             }
         }
     </style>
@@ -414,18 +460,18 @@
 
         <!-- 输入区域 -->
         <div class="input-area">
-            <input type="text" id="messageInput" placeholder="输入消息... 支持 Markdown 和 LaTeX" autofocus>
+            <div class="input-wrapper">
+                <input type="text" id="messageInput" placeholder="输入消息... @用户名 提及他人" autofocus>
+                <div class="mention-suggest" id="mentionSuggest"></div>
+            </div>
             <button id="sendBtn" onclick="sendMessage()">发送</button>
         </div>
         
         <!-- 格式提示 -->
         <div class="format-hint">
-            <span>📝 <code>**粗体**</code></span>
-            <span><code>*斜体*</code></span>
-            <span><code>`代码`</code></span>
-            <span><code>$$公式$$</code></span>
-            <span><code># 标题</code></span>
-            <span><code>- 列表</code></span>
+            <span>📝 <code>**粗体**</code> <code>*斜体*</code> <code>`代码`</code> <code>$$公式$$</code></span>
+            <span>🔗 <code>@用户名</code> 提及</span>
+            <span><span class="key">Shift+Enter</span> 换行</span>
             <span>🔒 HTML 已禁用</span>
         </div>
     </div>
@@ -435,12 +481,26 @@
         const isAdmin = {{ is_admin|tojson }};
         const room = 'public';
         let socket = null;
+        let allUsers = [];
+        let mentionActive = false;
+        let mentionIndex = -1;
+
+        // ========== 获取所有用户列表（用于 @提及）==========
+        function loadUsers() {
+            fetch('/api/users', { credentials: 'include' })
+                .then(r => r.json())
+                .then(data => {
+                    if (Array.isArray(data)) {
+                        allUsers = data.map(u => u.username);
+                    }
+                })
+                .catch(err => console.error('加载用户列表失败:', err));
+        }
 
         // ========== 配置 marked（禁用 HTML）==========
         const renderer = new marked.Renderer();
-        // 禁用 HTML 标签
         renderer.html = function(html) {
-            return ''; // 完全忽略 HTML
+            return '';
         };
         
         marked.setOptions({
@@ -451,32 +511,35 @@
             mangle: false
         });
 
-        // ========== 渲染 Markdown + KaTeX ==========
+        // ========== 渲染 Markdown + KaTeX + @提及 ==========
         function renderContent(text) {
             if (!text) return '';
             
-            // 先转义 HTML 特殊字符（防止注入）
+            // 先转义 HTML 特殊字符
             let safe = escapeHtml(text);
             
-            // 提取并保护 KaTeX 公式（防止被 Markdown 处理）
+            // 处理 @提及（将 @用户名 转为高亮）
+            safe = safe.replace(/@(\w+)/g, (match, name) => {
+                return `<span class="mention">@${escapeHtml(name)}</span>`;
+            });
+            
+            // 提取并保护 KaTeX 公式
             const formulas = [];
-            // 块级公式 $$...$$
             safe = safe.replace(/\$\$([\s\S]*?)\$\$/g, (match, formula) => {
                 const idx = formulas.length;
                 formulas.push({ type: 'block', content: formula });
                 return `%%KATEX_BLOCK_${idx}%%`;
             });
-            // 行内公式 $...$
             safe = safe.replace(/\$([^\$\n]+?)\$/g, (match, formula) => {
                 const idx = formulas.length;
                 formulas.push({ type: 'inline', content: formula });
                 return `%%KATEX_INLINE_${idx}%%`;
             });
             
-            // 使用 marked 渲染 Markdown
+            // 使用 marked 渲染 Markdown（保留换行）
             let html = marked.parse(safe);
             
-            // 恢复 KaTeX 公式并渲染
+            // 恢复 KaTeX 公式
             formulas.forEach((f, idx) => {
                 const placeholder = f.type === 'block' 
                     ? `%%KATEX_BLOCK_${idx}%%`
@@ -565,12 +628,11 @@
             const deleteBtn = (isOwn || isAdmin) ? 
                 `<button class="delete-btn" onclick="deleteMessage(${data.id})">✕</button>` : '';
             
-            // 渲染内容
             const renderedHtml = renderContent(data.content);
             
             div.innerHTML = `
                 <div class="msg-header">
-                    <span class="msg-username">${escapeHtml(data.username)}</span>
+                    <span class="msg-username" onclick="mentionUser('${escapeHtml(data.username)}')">${escapeHtml(data.username)}</span>
                     <span class="msg-time">${time}</span>
                     ${deleteBtn}
                 </div>
@@ -590,6 +652,62 @@
             container.scrollTop = container.scrollHeight;
         }
 
+        // ========== @提及功能 ==========
+        function mentionUser(name) {
+            const input = document.getElementById('messageInput');
+            input.focus();
+            // 如果输入框有内容，在末尾添加 @用户名
+            if (input.value.trim()) {
+                input.value += ` @${name}`;
+            } else {
+                input.value = `@${name} `;
+            }
+            input.setSelectionRange(input.value.length, input.value.length);
+            hideMentionSuggest();
+        }
+
+        // ========== @提及提示 ==========
+        function showMentionSuggest(query) {
+            const suggest = document.getElementById('mentionSuggest');
+            const input = document.getElementById('messageInput');
+            
+            if (!query || query.length === 0) {
+                suggest.style.display = 'none';
+                return;
+            }
+            
+            const matches = allUsers.filter(u => 
+                u.toLowerCase().includes(query.toLowerCase()) && 
+                u !== username
+            );
+            
+            if (matches.length === 0) {
+                suggest.style.display = 'none';
+                return;
+            }
+            
+            suggest.innerHTML = '';
+            matches.forEach((name, idx) => {
+                const item = document.createElement('div');
+                item.className = 'suggest-item' + (idx === mentionIndex ? ' active' : '');
+                item.textContent = `@${name}`;
+                item.onclick = () => {
+                    mentionUser(name);
+                };
+                suggest.appendChild(item);
+            });
+            
+            mentionIndex = -1;
+            suggest.style.display = 'block';
+            mentionActive = true;
+        }
+
+        function hideMentionSuggest() {
+            document.getElementById('mentionSuggest').style.display = 'none';
+            mentionActive = false;
+            mentionIndex = -1;
+        }
+
         // ========== 发送消息 ==========
         function sendMessage() {
             const input = document.getElementById('messageInput');
@@ -602,6 +720,7 @@
             });
             input.value = '';
             input.focus();
+            hideMentionSuggest();
         }
 
         // ========== 删除消息 ==========
@@ -660,12 +779,68 @@
             .catch(err => console.error('加载消息失败:', err));
         }
 
-        // ========== 键盘事件 ==========
-        document.getElementById('messageInput').addEventListener('keydown', (e) => {
-            if (e.key === 'Enter') sendMessage();
+        // ========== 输入事件 ==========
+        document.getElementById('messageInput').addEventListener('input', function(e) {
+            const value = this.value;
+            // 检测 @ 符号
+            const atPos = value.lastIndexOf('@');
+            if (atPos !== -1) {
+                const query = value.substring(atPos + 1);
+                if (query.includes(' ')) {
+                    hideMentionSuggest();
+                } else {
+                    showMentionSuggest(query);
+                }
+            } else {
+                hideMentionSuggest();
+            }
+        });
+
+        document.getElementById('messageInput').addEventListener('keydown', function(e) {
+            if (e.key === 'Enter' && !e.shiftKey) {
+                // 普通 Enter → 发送
+                e.preventDefault();
+                sendMessage();
+            }
+            // Shift+Enter → 换行（默认行为）
+            
+            // @提示导航
+            if (mentionActive) {
+                const items = document.querySelectorAll('#mentionSuggest .suggest-item');
+                if (items.length === 0) return;
+                
+                if (e.key === 'ArrowDown') {
+                    e.preventDefault();
+                    mentionIndex = (mentionIndex + 1) % items.length;
+                    items.forEach((el, idx) => {
+                        el.classList.toggle('active', idx === mentionIndex);
+                    });
+                } else if (e.key === 'ArrowUp') {
+                    e.preventDefault();
+                    mentionIndex = (mentionIndex - 1 + items.length) % items.length;
+                    items.forEach((el, idx) => {
+                        el.classList.toggle('active', idx === mentionIndex);
+                    });
+                } else if (e.key === 'Tab' || e.key === 'Enter') {
+                    if (mentionIndex >= 0 && items[mentionIndex]) {
+                        e.preventDefault();
+                        items[mentionIndex].click();
+                    }
+                } else if (e.key === 'Escape') {
+                    hideMentionSuggest();
+                }
+            }
+        });
+
+        // 点击其他地方关闭提示
+        document.addEventListener('click', function(e) {
+            if (!e.target.closest('.input-wrapper')) {
+                hideMentionSuggest();
+            }
         });
 
         // ========== 启动 ==========
+        loadUsers();
         initSocket();
         loadMessages();
     </script>
