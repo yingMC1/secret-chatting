@@ -14,10 +14,10 @@ app.secret_key = os.environ.get('SECRET_KEY', 'yingmc-chatroom-secret-key-2026')
 
 # ========== 生产环境 Session 配置 ==========
 app.config.update(
-    SESSION_COOKIE_SECURE=True,      # 仅 HTTPS 传输
-    SESSION_COOKIE_HTTPONLY=True,    # 禁止 JS 读取
-    SESSION_COOKIE_SAMESITE='Lax',   # 防止 CSRF
-    PERMANENT_SESSION_LIFETIME=86400 # 24 小时有效
+    SESSION_COOKIE_SECURE=True,
+    SESSION_COOKIE_HTTPONLY=True,
+    SESSION_COOKIE_SAMESITE='Lax',
+    PERMANENT_SESSION_LIFETIME=86400
 )
 
 socketio = SocketIO(app, cors_allowed_origins="*", async_mode='threading')
@@ -25,14 +25,13 @@ socketio = SocketIO(app, cors_allowed_origins="*", async_mode='threading')
 DB_PATH = 'chatroom.db'
 
 # ========== 在线用户统计 ==========
-online_users = {}  # {session_id: username}
+online_users = {}
 
 # ========== 数据库初始化 ==========
 def init_db():
     conn = sqlite3.connect(DB_PATH)
     c = conn.cursor()
     
-    # 创建用户表
     c.execute('''
         CREATE TABLE IF NOT EXISTS users (
             id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -44,7 +43,6 @@ def init_db():
         )
     ''')
     
-    # 创建消息表
     c.execute('''
         CREATE TABLE IF NOT EXISTS messages (
             id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -55,7 +53,6 @@ def init_db():
         )
     ''')
     
-    # 创建房间表
     c.execute('''
         CREATE TABLE IF NOT EXISTS rooms (
             id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -65,23 +62,15 @@ def init_db():
         )
     ''')
     
-    # ========== 设置 yingMC 为唯一所有者 ==========
     admin_pwd = hashlib.sha256('ying@akioi&1101'.encode()).hexdigest()
     
-    # 使用 INSERT OR REPLACE 确保 yingMC 存在且为管理员
     c.execute('''
         INSERT OR REPLACE INTO users (username, password, is_admin, is_banned) 
         VALUES (?, ?, 1, 0)
     ''', ('yingMC', admin_pwd))
     
-    # 删除其他所有管理员（只保留 yingMC）
     c.execute('DELETE FROM users WHERE username != ? AND is_admin = 1', ('yingMC',))
-    
-    # ========== 只保留 public 房间 ==========
-    # 删除所有其他房间
     c.execute('DELETE FROM rooms WHERE room_name != ?', ('public',))
-    
-    # 确保 public 房间存在
     c.execute('''
         INSERT OR REPLACE INTO rooms (room_name, created_by) 
         VALUES (?, ?)
@@ -100,6 +89,9 @@ def get_db():
 
 def hash_password(pwd):
     return hashlib.sha256(pwd.encode()).hexdigest()
+
+def is_owner(username):
+    return username == 'yingMC'
 
 # ========== 装饰器 ==========
 def login_required(f):
@@ -123,17 +115,15 @@ def admin_required(f):
         return f(*args, **kwargs)
     return decorated
 
-# ========== 强制 HTTPS（Railway 适配）==========
+# ========== 强制 HTTPS ==========
 @app.before_request
 def before_request():
-    # 确保使用 HTTPS
     if request.headers.get('X-Forwarded-Proto') == 'http':
         return redirect(request.url.replace('http://', 'https://'), 301)
 
 # ========== 路由 ==========
 @app.route('/')
 def index():
-    # 已登录 → 直接进入聊天室，未登录 → 跳转登录页
     if 'user_id' not in session:
         return redirect(url_for('login_page'))
     
@@ -142,7 +132,6 @@ def index():
     conn.close()
     
     if not user:
-        # 用户不存在，清除 session
         session.clear()
         return redirect(url_for('login_page'))
     
@@ -150,14 +139,11 @@ def index():
         session.clear()
         return '您已被封禁', 403
     
-    # 直接进入聊天室，不传递房间列表
     return render_template('index.html', username=user['username'], is_admin=user['is_admin'])
 
 @app.route('/login')
 def login_page():
-    # 如果已登录，直接跳转到聊天室
     if 'user_id' in session:
-        # 验证用户是否仍然有效
         conn = get_db()
         user = conn.execute('SELECT id FROM users WHERE id = ?', (session['user_id'],)).fetchone()
         conn.close()
@@ -181,13 +167,10 @@ def login():
     if user:
         if user['is_banned']:
             return jsonify({'error': '该账号已被封禁'}), 403
-        
-        # 设置 session
         session['user_id'] = user['id']
         session['username'] = user['username']
         session['is_admin'] = user['is_admin']
-        session.permanent = True  # 使 session 持久化
-        
+        session.permanent = True
         return jsonify({'success': True, 'is_admin': user['is_admin']})
     return jsonify({'error': '用户名或密码错误'}), 401
 
@@ -197,7 +180,6 @@ def register():
     username = data.get('username')
     password = hash_password(data.get('password', ''))
     
-    # 不允许注册 yingMC
     if username == 'yingMC':
         return jsonify({'error': '该用户名已被保留'}), 400
     
@@ -213,7 +195,6 @@ def register():
 
 @app.route('/api/logout', methods=['POST'])
 def logout():
-    # 从在线列表移除
     sid = session.get('_sid')
     if sid and sid in online_users:
         del online_users[sid]
@@ -224,7 +205,6 @@ def logout():
 @app.route('/api/messages/<room>')
 @login_required
 def get_messages(room):
-    # 只允许 public 房间
     if room != 'public':
         return jsonify({'error': '房间不存在'}), 404
     
@@ -247,7 +227,6 @@ def get_users():
 @app.route('/api/rooms')
 @admin_required
 def get_rooms():
-    # 只返回 public 房间
     return jsonify([{'room_name': 'public', 'created_by': 'yingMC', 'created_at': datetime.now().strftime('%Y-%m-%d %H:%M:%S')}])
 
 @app.route('/api/me')
@@ -274,10 +253,10 @@ def ban_user(user_id):
         conn.close()
         return jsonify({'error': '用户不存在'}), 404
     
-    # 不允许封禁 yingMC
+    # ===== 禁止封禁 yingMC =====
     if user['username'] == 'yingMC':
         conn.close()
-        return jsonify({'error': '不能封禁所有者'}), 400
+        return jsonify({'error': '❌ 不能封禁所有者 yingMC'}), 400
     
     if user['is_admin']:
         conn.close()
@@ -331,14 +310,15 @@ def revoke_admin(user_id):
         conn.close()
         return jsonify({'error': '该用户不是管理员'}), 400
     
-    # 不允许撤销 yingMC 的管理员权限
+    # ===== 禁止撤销 yingMC 的管理员权限 =====
     if user['username'] == 'yingMC':
         conn.close()
-        return jsonify({'error': '不能撤销所有者的管理员权限'}), 400
+        return jsonify({'error': '❌ 不能撤销所有者 yingMC 的管理员权限'}), 400
     
+    # ===== 禁止撤销自己的管理员权限 =====
     if user_id == session['user_id']:
         conn.close()
-        return jsonify({'error': '不能撤销自己的管理员权限'}), 400
+        return jsonify({'error': '❌ 不能撤销自己的管理员权限'}), 400
     
     conn.execute('UPDATE users SET is_admin = 0 WHERE id = ?', (user_id,))
     conn.commit()
@@ -354,10 +334,10 @@ def delete_user(user_id):
         conn.close()
         return jsonify({'error': '用户不存在'}), 404
     
-    # 不允许删除 yingMC
+    # ===== 禁止删除 yingMC =====
     if user['username'] == 'yingMC':
         conn.close()
-        return jsonify({'error': '不能删除所有者'}), 400
+        return jsonify({'error': '❌ 不能删除所有者 yingMC'}), 400
     
     if user['is_admin']:
         conn.close()
@@ -426,13 +406,11 @@ def handle_connect():
     session['_sid'] = request.sid
     online_users[request.sid] = username
     update_online_count()
-    print(f'✅ {username} 已连接，当前在线: {len(online_users)}')
 
 @socketio.on('disconnect')
 def handle_disconnect():
     username = online_users.pop(request.sid, '匿名')
     update_online_count()
-    print(f'❌ {username} 已断开，当前在线: {len(online_users)}')
 
 @socketio.on('join')
 def handle_join(data):
@@ -491,6 +469,5 @@ def handle_admin_message(data):
         content = data.get('content', '')
         emit('system_message', {'content': f'[管理员] {content}'}, room=room)
 
-# ========== 启动应用 ==========
 if __name__ == '__main__':
     socketio.run(app, host='0.0.0.0', port=5000, debug=False, async_mode='threading')
