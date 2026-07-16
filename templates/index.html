@@ -10,9 +10,9 @@
         body {
             font-family: 'Segoe UI', sans-serif;
             color: #eee;
-            min-height: 100vh;
+            width: 100vw;
+            height: 100vh;
             overflow: hidden;
-            /* 兜底黑色，防止图片加载失败空白 */
             background: #000;
         }
 
@@ -38,21 +38,20 @@
             100% { transform: translate(-2px, -1px); }
         }
 
-        /* 聊天窗口：左上角固定，永久最高层级 */
+        /* 【强制全屏】聊天窗口完全铺满屏幕，无边距、无圆角、无阴影 */
         .container {
             position: fixed;
-            top: 15px;
-            left: 15px;
+            inset: 0;
             z-index: 99999999;
-            width: 100%;
-            max-width: 900px;
-            height: 90vh;
+            width: 100vw;
+            height: 100vh;
             background: #16213e;
-            border-radius: 16px;
             display: flex;
             flex-direction: column;
             overflow: hidden;
-            box-shadow: 0 8px 32px rgba(0,0,0,0.9);
+            /* 移除圆角、阴影，彻底全屏 */
+            border-radius: 0;
+            box-shadow: none;
         }
 
         .header {
@@ -175,16 +174,8 @@
         }
         .admin-link:hover { background: #0f8a5a; }
 
-        /* 移动端适配 */
+        /* 移动端适配，保持全屏逻辑 */
         @media (max-width: 600px) {
-            .container {
-                top: 0;
-                left: 0;
-                height: 100vh;
-                border-radius: 0;
-                max-width: 100%;
-                width: 100%;
-            }
             .header { flex-wrap: wrap; gap: 8px; }
             .room-bar { padding: 8px 12px; }
             .messages { padding: 12px 12px; }
@@ -198,7 +189,7 @@
         <img src="{{ url_for('static', filename='hack-glitch-full.png') }}" alt="你已被黑客入侵">
     </div>
 
-    <!-- 左上角聊天窗口，永久顶层 -->
+    <!-- 强制全屏聊天窗口，完全覆盖浏览器可视区域 -->
     <div class="container">
         <div class="header">
             <h2>💬 聊天室</h2>
