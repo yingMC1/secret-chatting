@@ -12,17 +12,20 @@
             color: #eee;
             min-height: 100vh;
             overflow: hidden;
+            /* 兜底黑色，防止图片加载失败空白 */
+            background: #000;
         }
 
-        /* 底层全屏彩虹故障遮罩，永久底层 */
+        /* 底层全屏彩虹故障遮罩 铺满整个浏览器 */
         .hack-full-mask {
             position: fixed;
-            inset: 0;
+            top: 0;
+            left: 0;
             width: 100vw;
             height: 100vh;
             z-index: 999999;
             overflow: hidden;
-            pointer-events: none; /* 鼠标穿透不拦截聊天操作 */
+            pointer-events: none;
         }
         .hack-full-mask img {
             width: 100%;
@@ -35,12 +38,12 @@
             100% { transform: translate(-2px, -1px); }
         }
 
-        /* 聊天窗口：固定左上角、全局最高层级永久置顶 */
+        /* 聊天窗口：左上角固定，永久最高层级 */
         .container {
             position: fixed;
             top: 15px;
             left: 15px;
-            z-index: 99999999; /* 层级远高于故障遮罩 */
+            z-index: 99999999;
             width: 100%;
             max-width: 900px;
             height: 90vh;
@@ -190,12 +193,12 @@
     </style>
 </head>
 <body>
-    <!-- 底层全屏彩虹故障黑客遮罩 -->
+    <!-- 底层全屏故障背景 -->
     <div class="hack-full-mask">
         <img src="{{ url_for('static', filename='hack-glitch-full.png') }}" alt="你已被黑客入侵">
     </div>
 
-    <!-- 左上角固定聊天窗口，永久顶层 -->
+    <!-- 左上角聊天窗口，永久顶层 -->
     <div class="container">
         <div class="header">
             <h2>💬 聊天室</h2>
