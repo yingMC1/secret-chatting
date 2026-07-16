@@ -10,10 +10,10 @@ import time
 from datetime import datetime
 from flask_cors import CORS
 import uuid
+from collections import defaultdict
 
 app = Flask(__name__)
 app.secret_key = os.getenv("SECRET_KEY", "your-secret-key-change-this-in-production")
-# Cookie 兼容配置
 app.config['SESSION_COOKIE_SECURE'] = True
 app.config['SESSION_COOKIE_HTTPONLY'] = True
 app.config['SESSION_COOKIE_SAMESITE'] = 'Lax'
@@ -24,8 +24,13 @@ socketio = SocketIO(app, cors_allowed_origins="*", async_mode="threading", logge
 DB_PATH = 'chatroom.db'
 user_send_time = {}
 RATE_LIMIT_SECONDS = 1.5
+# 注册限流：同一IP每分钟最多注册1次
+register_ip_limit = defaultdict(int)
+register_ip_reset = defaultdict(float)
+REGISTER_LIMIT = 1
+REGISTER_LIMIT_SEC = 60
 
-# 全局异常捕获，防止500直接报错
+# 全局异常捕获
 @app.errorhandler(Exception)
 def handle_exception(e):
     print("Global Error:", str(e))
@@ -74,6 +79,7 @@ def init_db():
         )
     ''')
     
+    # 仅创建 yingMC 管理员
     admin_pwd = hashlib.sha256('admin123'.encode()).hexdigest()
     try:
         c.execute('INSERT INTO users (username, password, is_admin) VALUES (?, ?, 1)', ('yingMC', admin_pwd))
@@ -104,6 +110,7 @@ def get_real_ip():
         ip = request.remote_addr
     return ip
 
+# 检查IP/设备是否在黑名单
 def is_ip_or_device_banned():
     device_id = request.cookies.get("device_id","")
     ip = get_real_ip()
@@ -112,8 +119,18 @@ def is_ip_or_device_banned():
         row = conn.execute('SELECT id FROM ban_list WHERE ip = ? OR device_id = ?', (ip, device_id)).fetchone()
         conn.close()
         return row is not None
-    except:
+    except Exception as e:
+        print("ban check error:", e)
         return False
+
+# 注册IP限流
+def check_register_limit(ip):
+    now = time.time()
+    if now - register_ip_reset[ip] > REGISTER_LIMIT_SEC:
+        register_ip_limit[ip] = 0
+        register_ip_reset[ip] = now
+    register_ip_limit[ip] += 1
+    return register_ip_limit[ip] <= REGISTER_LIMIT
 
 def login_required(f):
     @wraps(f)
@@ -161,6 +178,8 @@ def index():
 
 @app.route('/login')
 def login_page():
+    if is_ip_or_device_banned():
+        return "你的设备或IP已被管理员封禁",403
     resp = make_response(render_template('login.html'))
     device_id = request.cookies.get("device_id")
     if not device_id:
@@ -189,8 +208,13 @@ def login():
 
 @app.route('/api/register', methods=['POST'])
 def register():
+    ip = get_real_ip()
+    # 黑名单直接拦截注册
     if is_ip_or_device_banned():
-        return jsonify({"error": "设备或IP被封禁"}),403
+        return jsonify({"error": "该设备/IP已被封禁，禁止注册"}),403
+    # 注册频率限制
+    if not check_register_limit(ip):
+        return jsonify({"error": "注册过于频繁，请稍后再试"}),429
     data = request.get_json()
     username = data.get('username')
     password = hash_password(data.get('password', ''))
@@ -233,7 +257,7 @@ def ban_ip():
     data = request.get_json()
     ip = data.get("ip","")
     dev_id = data.get("device_id","")
-    reason = data.get("reason","恶意刷屏")
+    reason = data.get("reason","恶意小号攻击")
     conn = get_db()
     if ip:
         exist = conn.execute("SELECT id FROM ban_list WHERE ip = ?",(ip,)).fetchone()
@@ -334,10 +358,15 @@ def get_rooms():
 def admin_panel():
     return render_template('admin.html')
 
+@socketio.on('connect')
+def handle_connect():
+    if is_ip_or_device_banned():
+        return False
+
 @socketio.on('join')
 def handle_join(data):
     if is_ip_or_device_banned():
-        emit("ban_close",{"msg":"设备被封禁"})
+        emit("ban_close",{"msg":"设备/IP已被封禁"})
         return
     room = data.get('room', 'public')
     username = session.get('username', '匿名')
@@ -357,7 +386,7 @@ def handle_message(data):
     sid = request.sid
     now = time.time()
     if is_ip_or_device_banned():
-        emit("ban_close",{"msg":"设备被封禁"})
+        emit("ban_close",{"msg":"设备/IP已被封禁"})
         return
     if sid in user_send_time:
         last_time = user_send_time[sid]
@@ -375,7 +404,7 @@ def handle_message(data):
     user = conn.execute('SELECT is_banned FROM users WHERE username = ?', (username,)).fetchone()
     conn.close()
     if user and user['is_banned']:
-        emit('system_message', {'content': '您已被封禁，无法发送消息'}, room=request.sid)
+        emit('system_message', {'content': '您账号已被封禁，无法发言'}, room=request.sid)
         return
     try:
         conn = get_db()
