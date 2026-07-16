@@ -546,4 +546,71 @@
         }
 
         function deleteUser(userId) {
-            if (!confirm('⚠️ 确定
+            if (!confirm('⚠️ 确定要删除该用户吗？\n该用户的所有消息也将被删除！')) return;
+            fetch(`/api/delete_user/${userId}`, { method: 'DELETE', credentials: 'include' })
+                .then(r => r.json())
+                .then(data => {
+                    if (data.success) { showToast(`✅ 用户 ${data.username} 已删除`, 'success');
+                        refreshData(); } else { showToast('❌ ' + (data.error || '删除失败'), 'error'); }
+                })
+                .catch(() => showToast('❌ 请求失败', 'error'));
+        }
+
+        function deleteMessage(msgId) {
+            if (!confirm('确定要删除该消息吗？')) return;
+            fetch(`/api/delete_message/${msgId}`, { method: 'DELETE', credentials: 'include' })
+                .then(r => r.json())
+                .then(data => {
+                    if (data.success) { showToast('✅ 消息已删除', 'success');
+                        loadMessages(); } else { showToast('❌ ' + (data.error || '删除失败'), 'error'); }
+                })
+                .catch(() => showToast('❌ 请求失败', 'error'));
+        }
+
+        // ===== 关键修复：清空消息功能已启用 =====
+        function clearAllMessages() {
+            if (!confirm('⚠️ 确定要清空所有消息吗？此操作不可恢复！')) return;
+            fetch('/api/clear_messages/public', { method: 'DELETE', credentials: 'include' })
+                .then(r => r.json())
+                .then(data => {
+                    if (data.success) { showToast('✅ 所有消息已清空', 'success');
+                        loadMessages(); } else { showToast('❌ ' + (data.error || '清空失败'), 'error'); }
+                })
+                .catch(() => showToast('❌ 请求失败', 'error'));
+        }
+
+        function refreshData() { loadUsers();
+            loadOnlineCount();
+            showToast('🔄 数据已刷新', 'info'); }
+
+        function refreshMessages() { loadMessages();
+            showToast('🔄 消息已刷新', 'info'); }
+
+        function showToast(message, type = 'info') {
+            const existing = document.querySelector('.toast');
+            if (existing) existing.remove();
+            const toast = document.createElement('div');
+            toast.className = `toast toast-${type}`;
+            toast.textContent = message;
+            document.body.appendChild(toast);
+            setTimeout(() => {
+                toast.style.opacity = '0';
+                toast.style.transition = 'opacity 0.3s';
+                setTimeout(() => toast.remove(), 300);
+            }, 3000);
+        }
+
+        function escapeHtml(text) {
+            if (!text) return '';
+            const div = document.createElement('div');
+            div.textContent = text;
+            return div.innerHTML;
+        }
+
+        // 每30秒自动刷新
+        setInterval(refreshData, 30000);
+        refreshData();
+        loadMessages();
+    </script>
+</body>
+</html>
