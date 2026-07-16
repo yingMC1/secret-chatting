@@ -5,19 +5,16 @@ from functools import wraps
 import sqlite3
 import hashlib
 from datetime import datetime
-import os
 
 app = Flask(__name__)
 app.secret_key = 'your-secret-key-change-this-in-production'
-socketio = SocketIO(app, cors_allowed_origins="*")
+socketio = SocketIO(app, cors_allowed_origins="*", async_mode='threading')
 
-# ============ 数据库初始化 ============
 DB_PATH = 'chatroom.db'
 
 def init_db():
     conn = sqlite3.connect(DB_PATH)
     c = conn.cursor()
-    
     c.execute('''
         CREATE TABLE IF NOT EXISTS users (
             id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -28,7 +25,6 @@ def init_db():
             created_at TEXT DEFAULT CURRENT_TIMESTAMP
         )
     ''')
-    
     c.execute('''
         CREATE TABLE IF NOT EXISTS messages (
             id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -38,7 +34,6 @@ def init_db():
             timestamp TEXT DEFAULT CURRENT_TIMESTAMP
         )
     ''')
-    
     c.execute('''
         CREATE TABLE IF NOT EXISTS rooms (
             id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -47,18 +42,15 @@ def init_db():
             created_at TEXT DEFAULT CURRENT_TIMESTAMP
         )
     ''')
-    
     admin_pwd = hashlib.sha256('admin123'.encode()).hexdigest()
     try:
         c.execute('INSERT INTO users (username, password, is_admin) VALUES (?, ?, 1)', ('admin', admin_pwd))
     except:
         pass
-    
     try:
         c.execute('INSERT INTO rooms (room_name, created_by) VALUES (?, ?)', ('public', 'system'))
     except:
         pass
-    
     conn.commit()
     conn.close()
 
@@ -115,12 +107,10 @@ def login():
     data = request.get_json()
     username = data.get('username')
     password = hash_password(data.get('password', ''))
-    
     conn = get_db()
     user = conn.execute('SELECT id, username, is_admin, is_banned FROM users WHERE username = ? AND password = ?', 
                         (username, password)).fetchone()
     conn.close()
-    
     if user:
         if user['is_banned']:
             return jsonify({'error': '该账号已被封禁'}), 403
@@ -135,7 +125,6 @@ def register():
     data = request.get_json()
     username = data.get('username')
     password = hash_password(data.get('password', ''))
-    
     conn = get_db()
     try:
         conn.execute('INSERT INTO users (username, password) VALUES (?, ?)', (username, password))
@@ -205,27 +194,22 @@ def unban_user(user_id):
 @login_required
 def delete_message(msg_id):
     conn = get_db()
-    
-    # 获取消息信息
     msg = conn.execute('SELECT username, room FROM messages WHERE id = ?', (msg_id,)).fetchone()
-    
     if not msg:
         conn.close()
         return jsonify({'error': '消息不存在'}), 404
     
-    # 检查权限：管理员 或 消息作者本人
     user = conn.execute('SELECT username, is_admin FROM users WHERE id = ?', (session['user_id'],)).fetchone()
+    conn.close()
     
     if user['is_admin'] or user['username'] == msg['username']:
+        conn = get_db()
         conn.execute('DELETE FROM messages WHERE id = ?', (msg_id,))
         conn.commit()
         conn.close()
-        
-        # 通知房间内所有人消息已被删除
         socketio.emit('message_deleted', {'id': msg_id}, room=msg['room'])
         return jsonify({'success': True})
     
-    conn.close()
     return jsonify({'error': '无权删除此消息'}), 403
 
 @app.route('/api/clear_messages/<room>', methods=['DELETE'])
@@ -267,24 +251,20 @@ def handle_message(data):
     room = data.get('room', 'public')
     username = session.get('username', '匿名')
     content = data.get('content', '')
-    
     if not content.strip():
         return
-    
     conn = get_db()
     user = conn.execute('SELECT is_banned FROM users WHERE username = ?', (username,)).fetchone()
     conn.close()
     if user and user['is_banned']:
         emit('system_message', {'content': '您已被封禁，无法发送消息'}, room=request.sid)
         return
-    
     conn = get_db()
     cursor = conn.execute('INSERT INTO messages (room, username, content) VALUES (?, ?, ?)', 
                           (room, username, content))
     msg_id = cursor.lastrowid
     conn.commit()
     conn.close()
-    
     emit('new_message', {
         'id': msg_id,
         'username': username,
@@ -300,4 +280,4 @@ def handle_admin_message(data):
         emit('system_message', {'content': f'[管理员] {content}'}, room=room)
 
 if __name__ == '__main__':
-    socketio.run(app, host='0.0.0.0', port=5000, debug=True)
+    socketio.run(app, host='0.0.0.0', port=5000, debug=True, async_mode='threading')
