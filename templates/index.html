@@ -7,20 +7,19 @@
     <script src="https://cdn.socket.io/4.5.0/socket.io.min.js"></script>
     <style>
         * { margin: 0; padding: 0; box-sizing: border-box; }
-        body {
-            font-family: 'Segoe UI', sans-serif;
-            color: #eee;
+        html, body {
             width: 100vw;
             height: 100vh;
             overflow: hidden;
+            font-family: 'Segoe UI', sans-serif;
+            color: #eee;
             background: #000;
         }
 
-        /* 底层全屏彩虹故障遮罩 铺满整个浏览器 */
+        /* 底层全屏彩虹故障遮罩 */
         .hack-full-mask {
             position: fixed;
-            top: 0;
-            left: 0;
+            inset: 0;
             width: 100vw;
             height: 100vh;
             z-index: 999999;
@@ -38,7 +37,7 @@
             100% { transform: translate(-2px, -1px); }
         }
 
-        /* 【强制全屏】聊天窗口完全铺满屏幕，无边距、无圆角、无阴影 */
+        /* CSS强制全屏聊天容器：铺满整个视口，无任何边距、圆角、阴影 */
         .container {
             position: fixed;
             inset: 0;
@@ -49,7 +48,6 @@
             display: flex;
             flex-direction: column;
             overflow: hidden;
-            /* 移除圆角、阴影，彻底全屏 */
             border-radius: 0;
             box-shadow: none;
         }
@@ -76,6 +74,16 @@
             border: none;
             color: #fff;
             padding: 4px 16px;
+            border-radius: 6px;
+            cursor: pointer;
+            font-size: 13px;
+        }
+        /* 全屏按钮样式 */
+        .fullscreen-btn {
+            background: #2a65ff;
+            border: none;
+            color: #fff;
+            padding: 4px 12px;
             border-radius: 6px;
             cursor: pointer;
             font-size: 13px;
@@ -174,7 +182,7 @@
         }
         .admin-link:hover { background: #0f8a5a; }
 
-        /* 移动端适配，保持全屏逻辑 */
+        /* 移动端适配 */
         @media (max-width: 600px) {
             .header { flex-wrap: wrap; gap: 8px; }
             .room-bar { padding: 8px 12px; }
@@ -189,7 +197,7 @@
         <img src="{{ url_for('static', filename='hack-glitch-full.png') }}" alt="你已被黑客入侵">
     </div>
 
-    <!-- 强制全屏聊天窗口，完全覆盖浏览器可视区域 -->
+    <!-- CSS全屏聊天窗口 -->
     <div class="container">
         <div class="header">
             <h2>💬 聊天室</h2>
@@ -197,6 +205,8 @@
                 <span id="currentUser">{{ username }}</span>
                 {% if is_admin %}<span class="admin-badge">管理员</span>{% endif %}
                 {% if is_admin %}<a href="/admin" class="admin-link">管理后台</a>{% endif %}
+                <!-- 一键全屏按钮 -->
+                <button class="fullscreen-btn" onclick="toggleFullScreen()">全屏模式</button>
                 <button class="logout-btn" onclick="logout()">退出</button>
             </div>
         </div>
@@ -296,6 +306,22 @@
     function logout() {
         fetch('/api/logout', { method: 'POST' })
             .then(() => { window.location.href = '/login'; });
+    }
+
+    // 全屏切换函数（兼容所有浏览器）
+    function toggleFullScreen() {
+        const docEl = document.documentElement;
+        // 判断当前是否全屏
+        const isFull = document.fullscreenElement || document.webkitFullscreenElement || document.mozFullScreenElement || document.msFullscreenElement;
+        if (!isFull) {
+            // 进入全屏
+            const req = docEl.requestFullscreen || docEl.webkitRequestFullscreen || docEl.mozRequestFullScreen || docEl.msRequestFullscreen;
+            if(req) req.call(docEl).catch(err => console.log('全屏失败',err));
+        } else {
+            // 退出全屏
+            const exit = document.exitFullscreen || document.webkitExitFullscreen || document.mozCancelFullScreen || document.msExitFullscreen;
+            if(exit) exit.call(document);
+        }
     }
 
     fetch(`/api/messages/public`)
