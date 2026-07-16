@@ -78,7 +78,7 @@
         table { 
             width: 100%; 
             border-collapse: collapse; 
-            min-width: 600px;
+            min-width: 500px;
         }
         th { 
             background: #0f3460; 
@@ -108,13 +108,12 @@
         .btn-danger:hover { background: #c73652; }
         .btn-success { background: #0f8a5a; color: #fff; }
         .btn-success:hover { background: #0f6b4a; }
-        .btn-warning { background: #d4a020; color: #fff; }
-        .btn-warning:hover { background: #b88918; }
 
         .badge { padding: 2px 10px; border-radius: 12px; font-size: 11px; display: inline-block; }
         .badge-admin { background: #e94560; color: #fff; }
         .badge-banned { background: #cc3344; color: #fff; }
         .badge-normal { background: #2a4a6a; color: #aaa; }
+        .badge-room { background: #2a65ff; color: #fff; }
 
         .search-box { 
             display: flex; 
@@ -122,8 +121,7 @@
             margin-bottom: 16px; 
             flex-wrap: wrap;
         }
-        .search-box input,
-        .search-box select { 
+        .search-box input { 
             flex: 1; 
             min-width: 150px;
             padding: 8px 14px; 
@@ -135,7 +133,6 @@
             outline: none; 
         }
         .search-box input::placeholder { color: #6688aa; }
-        .search-box select option { background: #1a2a4a; }
 
         .empty { text-align: center; padding: 40px; color: #666; }
 
@@ -164,12 +161,24 @@
             color: #6688aa;
         }
 
+        .room-info {
+            background: #16213e;
+            padding: 12px 20px;
+            border-radius: 10px;
+            margin-bottom: 16px;
+            display: flex;
+            align-items: center;
+            gap: 12px;
+            border-left: 4px solid #2a65ff;
+        }
+        .room-info .label { color: #888; font-size: 13px; }
+        .room-info .name { color: #fff; font-size: 16px; font-weight: bold; }
+
         @media (max-width: 600px) { 
             .stats { grid-template-columns: 1fr 1fr; }
             .header { flex-direction: column; align-items: flex-start; }
             .tabs button { padding: 8px 14px; font-size: 13px; }
             th, td { padding: 8px 10px; font-size: 12px; }
-            .search-box input { min-width: 100px; }
         }
     </style>
 </head>
@@ -189,14 +198,13 @@
         <div class="card"><div class="num" id="totalUsers">-</div><div class="label">总用户</div></div>
         <div class="card"><div class="num" id="totalAdmins">-</div><div class="label">管理员</div></div>
         <div class="card"><div class="num" id="totalBanned">-</div><div class="label">已封禁</div></div>
-        <div class="card"><div class="num" id="totalRooms">-</div><div class="label">聊天室</div></div>
+        <div class="card"><div class="num" id="totalMessages">-</div><div class="label">总消息</div></div>
     </div>
 
     <!-- Tab切换 -->
     <div class="tabs">
         <button class="active" data-tab="users">👥 用户管理</button>
         <button data-tab="messages">💬 消息记录</button>
-        <button data-tab="rooms">🏠 房间管理</button>
     </div>
 
     <!-- 用户管理 -->
@@ -212,29 +220,20 @@
         </div>
     </div>
 
-    <!-- 消息记录 -->
+    <!-- 消息记录（只有一个 public 房间） -->
     <div id="tab-messages" class="tab-content">
+        <div class="room-info">
+            <span class="label">📌 当前房间：</span>
+            <span class="name badge badge-room">public</span>
+            <span style="color:#888;font-size:13px;margin-left:8px;">（唯一聊天室）</span>
+        </div>
         <div class="search-box">
             <input type="text" id="msgSearch" placeholder="搜索消息内容..." oninput="filterMessages()">
-            <select id="msgRoomFilter" onchange="filterMessages()">
-                <option value="">全部房间</option>
-            </select>
         </div>
         <div class="table-wrapper">
             <table>
-                <thead><tr><th>ID</th><th>房间</th><th>用户</th><th>消息内容</th><th>时间</th><th>操作</th></tr></thead>
-                <tbody id="msgTableBody"><tr><td colspan="6" class="loading">加载中</td></tr></tbody>
-            </table>
-        </div>
-    </div>
-
-    <!-- 房间管理（只读，不能创建） -->
-    <div id="tab-rooms" class="tab-content">
-        <div style="margin-bottom:12px;color:#888;font-size:14px;">📌 房间列表（仅查看，不可创建）</div>
-        <div class="table-wrapper">
-            <table>
-                <thead><tr><th>房间名</th><th>创建者</th><th>创建时间</th><th>操作</th></tr></thead>
-                <tbody id="roomTableBody"><tr><td colspan="4" class="loading">加载中</td></tr></tbody>
+                <thead><tr><th>ID</th><th>用户</th><th>消息内容</th><th>时间</th><th>操作</th></tr></thead>
+                <tbody id="msgTableBody"><tr><td colspan="5" class="loading">加载中</td></tr></tbody>
             </table>
         </div>
     </div>
@@ -245,12 +244,7 @@
 
 <script>
     // ============================================================
-    //  配置
-    // ============================================================
-    const USE_DEMO = true;  // true=演示模式, false=真实API
-
-    // ============================================================
-    //  演示数据
+    //  演示数据（只有一个 public 房间）
     // ============================================================
     const DEMO_DATA = {
         users: [
@@ -259,15 +253,10 @@
             { id: 4, username: 'banned_user', is_admin: false, is_banned: true, created_at: '2026-07-14 10:00:00' },
         ],
         messages: [
-            { id: 1, room: 'public', username: 'yingMC', content: '大家好！欢迎来到聊天室 🎉', timestamp: '2026-07-16 04:40:44' },
-            { id: 2, room: 'public', username: 'testuser', content: '你好！很高兴认识大家 👋', timestamp: '2026-07-16 04:41:00' },
-            { id: 3, room: 'general', username: 'yingMC', content: '这个房间是专门讨论技术问题的', timestamp: '2026-07-16 04:42:00' },
-            { id: 4, room: 'random', username: 'testuser', content: '今天天气真好啊 ☀️', timestamp: '2026-07-16 04:43:00' },
-        ],
-        rooms: [
-            { room_name: 'public', created_by: '系统', created_at: '2026-07-15 08:00:00' },
-            { room_name: 'general', created_by: 'yingMC', created_at: '2026-07-15 08:30:00' },
-            { room_name: 'random', created_by: 'testuser', created_at: '2026-07-15 09:00:00' },
+            { id: 1, username: 'yingMC', content: '大家好！欢迎来到聊天室 🎉', timestamp: '2026-07-16 04:40:44' },
+            { id: 2, username: 'testuser', content: '你好！很高兴认识大家 👋', timestamp: '2026-07-16 04:41:00' },
+            { id: 3, username: 'yingMC', content: '这个房间是唯一的公共聊天室', timestamp: '2026-07-16 04:42:00' },
+            { id: 4, username: 'testuser', content: '今天天气真好啊 ☀️', timestamp: '2026-07-16 04:43:00' },
         ]
     };
 
@@ -276,28 +265,16 @@
     // ============================================================
     let users = [];
     let messages = [];
-    let rooms = [];
     let currentAdmin = 'yingMC';
 
     // ============================================================
     //  加载数据
     // ============================================================
     function loadAll() {
-        if (USE_DEMO) {
-            users = [...DEMO_DATA.users];
-            messages = [...DEMO_DATA.messages];
-            rooms = [...DEMO_DATA.rooms];
-            currentAdmin = 'yingMC';
-            renderAll();
-            return;
-        }
-
-        // 真实API模式（略）
         users = [...DEMO_DATA.users];
         messages = [...DEMO_DATA.messages];
-        rooms = [...DEMO_DATA.rooms];
+        currentAdmin = 'yingMC';
         renderAll();
-        showToast('⚠️ 使用演示数据', true);
     }
 
     // ============================================================
@@ -311,7 +288,7 @@
         document.getElementById('totalUsers').textContent = total;
         document.getElementById('totalAdmins').textContent = admins;
         document.getElementById('totalBanned').textContent = banned;
-        document.getElementById('totalRooms').textContent = rooms.length;
+        document.getElementById('totalMessages').textContent = messages.length;
         document.getElementById('adminName').textContent = `👤 管理员：${currentAdmin}`;
     }
 
@@ -345,27 +322,23 @@
 
     function renderMessages() {
         const search = document.getElementById('msgSearch').value.toLowerCase();
-        const roomFilter = document.getElementById('msgRoomFilter').value;
         const filtered = messages.filter(m => {
-            const matchContent = m.content && m.content.toLowerCase().includes(search);
-            const matchRoom = roomFilter === '' || m.room === roomFilter;
-            return matchContent && matchRoom;
+            return m.content && m.content.toLowerCase().includes(search);
         });
         const tbody = document.getElementById('msgTableBody');
         if (filtered.length === 0) {
-            tbody.innerHTML = '<tr><td colspan="6" class="empty">暂无消息</td></tr>';
+            tbody.innerHTML = '<tr><td colspan="5" class="empty">暂无消息</td></tr>';
             return;
         }
         const display = [...filtered].reverse().slice(0, 100);
         tbody.innerHTML = display.map(m => `
             <tr>
                 <td>${m.id}</td>
-                <td><span class="badge" style="background:#2a4a6a;">${m.room}</span></td>
                 <td>${m.username}</td>
-                <td style="max-width:300px;word-wrap:break-word;">${m.content}</td>
+                <td style="max-width:400px;word-wrap:break-word;">${m.content}</td>
                 <td>${m.timestamp || '-'}</td>
                 <td>
-                    <button class="btn btn-danger" onclick="deleteMessage(${m.id}, '${m.room}')">删除</button>
+                    <button class="btn btn-danger" onclick="deleteMessage(${m.id})">删除</button>
                 </td>
             </tr>
         `).join('');
@@ -373,39 +346,10 @@
 
     function filterMessages() { renderMessages(); }
 
-    function updateMsgRoomFilter() {
-        const sel = document.getElementById('msgRoomFilter');
-        const current = sel.value;
-        const roomNames = [...new Set(messages.map(m => m.room))];
-        sel.innerHTML = '<option value="">全部房间</option>' + roomNames.map(r => 
-            `<option value="${r}" ${r===current?'selected':''}>${r}</option>`
-        ).join('');
-    }
-
-    function renderRooms() {
-        const tbody = document.getElementById('roomTableBody');
-        if (rooms.length === 0) {
-            tbody.innerHTML = '<tr><td colspan="4" class="empty">暂无房间</td></tr>';
-            return;
-        }
-        tbody.innerHTML = rooms.map(r => `
-            <tr>
-                <td><strong>${r.room_name}</strong></td>
-                <td>${r.created_by || '系统'}</td>
-                <td>${r.created_at || '-'}</td>
-                <td>
-                    <button class="btn btn-danger" onclick="clearRoom('${r.room_name}')">清空消息</button>
-                </td>
-            </tr>
-        `).join('');
-    }
-
     function renderAll() {
         renderStats();
         renderUsers();
         renderMessages();
-        renderRooms();
-        updateMsgRoomFilter();
     }
 
     // ============================================================
@@ -431,7 +375,7 @@
         }
     }
 
-    function deleteMessage(id, room) {
+    function deleteMessage(id) {
         if (!confirm('确认删除该消息？此操作不可撤销！')) return;
         const idx = messages.findIndex(m => m.id === id);
         if (idx !== -1) {
@@ -439,13 +383,6 @@
             renderAll();
             showToast('✅ 已删除消息', false, 'success');
         }
-    }
-
-    function clearRoom(roomName) {
-        if (!confirm(`确认清空 "${roomName}" 的所有消息？此操作不可撤销！`)) return;
-        messages = messages.filter(m => m.room !== roomName);
-        renderAll();
-        showToast(`✅ 已清空 "${roomName}" 的消息`, false, 'success');
     }
 
     // ============================================================
@@ -478,7 +415,7 @@
     //  初始化
     // ============================================================
     loadAll();
-    console.log('✅ 管理后台已加载（演示模式，不可创建房间）');
+    console.log('✅ 管理后台已加载（单一房间: public）');
 </script>
 </body>
 </html>
