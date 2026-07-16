@@ -146,7 +146,7 @@
         </div>
 
         <div class="default-hint">
-            默认管理员账号：<code>admin</code> / <code>admin123</code>
+            👤 默认管理员：<code>yingMC</code>
         </div>
     </div>
 
@@ -214,7 +214,6 @@
                     } else {
                         successMsg.textContent = '✅ 注册成功，请登录';
                         successMsg.classList.add('show');
-                        // 自动切换到登录模式
                         if (!isLoginMode) toggleMode();
                         document.getElementById('username').value = '';
                         document.getElementById('password').value = '';
@@ -231,14 +230,6 @@
                 btn.textContent = isLoginMode ? '登录' : '注册';
             }
         }
-
-        // Enter 键提交
-        document.getElementById('authForm').addEventListener('keydown', (e) => {
-            if (e.key === 'Enter') {
-                e.preventDefault();
-                document.getElementById('submitBtn').click();
-            }
-        });
     </script>
 </body>
 </html>
