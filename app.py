@@ -355,6 +355,7 @@ def delete_user(user_id):
     return jsonify({'success': True, 'username': user['username']})
 
 
+# ===== 关键修复：禁止删除 yingMC 的消息 =====
 @app.route('/api/delete_message/<int:msg_id>', methods=['DELETE'])
 @login_required
 def delete_message(msg_id):
@@ -363,6 +364,11 @@ def delete_message(msg_id):
     if not msg:
         conn.close()
         return jsonify({'error': '消息不存在'}), 404
+
+    # ===== 禁止删除 yingMC 的消息 =====
+    if msg['username'] == 'yingMC':
+        conn.close()
+        return jsonify({'error': '❌ 不能删除所有者 yingMC 的消息'}), 400
 
     user = conn.execute('SELECT username, is_admin FROM users WHERE id = ?', (session['user_id'],)).fetchone()
     conn.close()
