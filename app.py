@@ -42,11 +42,20 @@ def init_db():
             created_at TEXT DEFAULT CURRENT_TIMESTAMP
         )
     ''')
-    admin_pwd = hashlib.sha256('admin123'.encode()).hexdigest()
+    
+    # ========== 默认管理员改为 yingMC ==========
+    admin_pwd = hashlib.sha256('ying@akioi&1101'.encode()).hexdigest()
     try:
-        c.execute('INSERT INTO users (username, password, is_admin) VALUES (?, ?, 1)', ('admin', admin_pwd))
+        c.execute('INSERT INTO users (username, password, is_admin) VALUES (?, ?, 1)', ('yingMC', admin_pwd))
     except:
         pass
+    
+    # 删除 admin 账号（如果存在）
+    try:
+        c.execute('DELETE FROM users WHERE username = ?', ('admin',))
+    except:
+        pass
+    
     try:
         c.execute('INSERT INTO rooms (room_name, created_by) VALUES (?, ?)', ('public', 'system'))
     except:
@@ -167,7 +176,7 @@ def get_rooms():
     conn.close()
     return jsonify([dict(r) for r in rooms])
 
-# ========== 新增：获取当前用户信息 ==========
+# ========== 获取当前用户信息 ==========
 @app.route('/api/me')
 @login_required
 def get_me():
@@ -201,7 +210,7 @@ def unban_user(user_id):
     conn.close()
     return jsonify({'success': True})
 
-# ========== 新增：授予管理员权限 ==========
+# ========== 授予管理员权限 ==========
 @app.route('/api/make_admin/<int:user_id>', methods=['POST'])
 @admin_required
 def make_admin(user_id):
@@ -218,7 +227,7 @@ def make_admin(user_id):
     conn.close()
     return jsonify({'success': True, 'username': user['username']})
 
-# ========== 新增：撤销管理员权限 ==========
+# ========== 撤销管理员权限 ==========
 @app.route('/api/revoke_admin/<int:user_id>', methods=['POST'])
 @admin_required
 def revoke_admin(user_id):
@@ -238,7 +247,7 @@ def revoke_admin(user_id):
     conn.close()
     return jsonify({'success': True, 'username': user['username']})
 
-# ========== 新增：删除用户（管理员专用）==========
+# ========== 删除用户（管理员专用）==========
 @app.route('/api/delete_user/<int:user_id>', methods=['DELETE'])
 @admin_required
 def delete_user(user_id):
@@ -250,9 +259,7 @@ def delete_user(user_id):
     if user['is_admin']:
         conn.close()
         return jsonify({'error': '不能删除管理员'}), 400
-    # 删除用户的所有消息
     conn.execute('DELETE FROM messages WHERE username = ?', (user['username'],))
-    # 删除用户
     conn.execute('DELETE FROM users WHERE id = ?', (user_id,))
     conn.commit()
     conn.close()
@@ -271,7 +278,6 @@ def delete_message(msg_id):
     user = conn.execute('SELECT username, is_admin FROM users WHERE id = ?', (session['user_id'],)).fetchone()
     conn.close()
     
-    # 管理员可以删除任何消息，普通用户只能删除自己的消息
     if user['is_admin'] or user['username'] == msg['username']:
         conn = get_db()
         conn.execute('DELETE FROM messages WHERE id = ?', (msg_id,))
@@ -350,4 +356,4 @@ def handle_admin_message(data):
         emit('system_message', {'content': f'[管理员] {content}'}, room=room)
 
 if __name__ == '__main__':
-    socketio.run(app, host='0.0.0.0', port=5000, debug=True, async_mode='threading')
+    socketio.run(app, host='0.0.0.0', port=5000, debug=True, async_mode='threading', allow_unsafe_werkzeug=True)
