@@ -24,6 +24,10 @@ socketio = SocketIO(app, cors_allowed_origins="*", async_mode='threading')
 
 DB_PATH = 'chatroom.db'
 
+# ========== 在线用户统计 ==========
+online_users = {}  # {session_id: username}
+online_count = 0
+
 # ========== 数据库初始化 ==========
 def init_db():
     conn = sqlite3.connect(DB_PATH)
@@ -193,6 +197,11 @@ def register():
 
 @app.route('/api/logout', methods=['POST'])
 def logout():
+    # 从在线列表移除
+    sid = session.get('_sid')
+    if sid and sid in online_users:
+        del online_users[sid]
+        update_online_count()
     session.clear()
     return jsonify({'success': True})
 
@@ -234,6 +243,10 @@ def get_me():
     if user:
         return jsonify({'id': user['id'], 'username': user['username'], 'is_admin': bool(user['is_admin'])})
     return jsonify({'error': '用户不存在'}), 404
+
+@app.route('/api/online_count')
+def get_online_count():
+    return jsonify({'count': len(online_users)})
 
 @app.route('/api/ban/<int:user_id>', methods=['POST'])
 @admin_required
@@ -385,7 +398,28 @@ def admin_panel():
 def health():
     return 'OK', 200
 
+# ========== 更新在线人数 ==========
+def update_online_count():
+    count = len(online_users)
+    socketio.emit('online_count', {'count': count}, room='public')
+
 # ========== SocketIO 事件 ==========
+@socketio.on('connect')
+def handle_connect():
+    username = session.get('username', '匿名')
+    # 存储 sid 到 session
+    session['_sid'] = request.sid
+    # 添加到在线列表
+    online_users[request.sid] = username
+    update_online_count()
+    print(f'✅ {username} 已连接，当前在线: {len(online_users)}')
+
+@socketio.on('disconnect')
+def handle_disconnect():
+    username = online_users.pop(request.sid, '匿名')
+    update_online_count()
+    print(f'❌ {username} 已断开，当前在线: {len(online_users)}')
+
 @socketio.on('join')
 def handle_join(data):
     room = data.get('room', 'public')
@@ -396,6 +430,8 @@ def handle_join(data):
     join_room(room)
     emit('system_message', {'content': f'{username} 加入了房间'}, room=room)
     emit('room_joined', {'room': room})
+    # 发送当前在线人数
+    emit('online_count', {'count': len(online_users)}, room=request.sid)
 
 @socketio.on('leave')
 def handle_leave(data):
