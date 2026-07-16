@@ -614,30 +614,40 @@
         }
 
         function addMessage(data, isOwn) {
-            const container = document.getElementById('messages');
-            const div = document.createElement('div');
-            div.className = `message ${isOwn ? 'own' : 'other'}`;
-            div.dataset.id = data.id;
+    const container = document.getElementById('messages');
+    const div = document.createElement('div');
+    div.className = `message ${isOwn ? 'own' : 'other'}`;
+    div.dataset.id = data.id;
 
-            const time = new Date(data.timestamp).toLocaleTimeString('zh-CN', { hour: '2-digit', minute: '2-digit' });
+    const time = new Date(data.timestamp).toLocaleTimeString('zh-CN', { hour: '2-digit', minute: '2-digit' });
 
-            const deleteBtn = (isOwn || isAdmin) ?
-                `<button class="delete-btn" onclick="deleteMessage(${data.id})">✕</button>` : '';
+    // ===== 删除按钮逻辑 =====
+    let showDelete = false;
+    if (data.username === 'yingMC') {
+        // yingMC 的消息：只有 yingMC 本人能删
+        showDelete = (username === 'yingMC');
+    } else {
+        // 其他人的消息：作者本人 或 管理员能删
+        showDelete = isAdmin || data.username === username;
+    }
 
-            const renderedHtml = renderContent(data.content);
+    const deleteBtn = showDelete ?
+        `<button class="delete-btn" onclick="deleteMessage(${data.id})">✕</button>` : '';
 
-            div.innerHTML = `
-                <div class="msg-header">
-                    <span class="msg-username" onclick="mentionUser('${escapeHtml(data.username)}')">${escapeHtml(data.username)}</span>
-                    <span class="msg-time">${time}</span>
-                    ${deleteBtn}
-                </div>
-                <div class="msg-content">${renderedHtml}</div>
-            `;
+    const renderedHtml = renderContent(data.content);
 
-            container.appendChild(div);
-            container.scrollTop = container.scrollHeight;
-        }
+    div.innerHTML = `
+        <div class="msg-header">
+            <span class="msg-username" onclick="mentionUser('${escapeHtml(data.username)}')">${escapeHtml(data.username)}</span>
+            <span class="msg-time">${time}</span>
+            ${deleteBtn}
+        </div>
+        <div class="msg-content">${renderedHtml}</div>
+    `;
+
+    container.appendChild(div);
+    container.scrollTop = container.scrollHeight;
+}
 
         function addSystemMessage(content) {
             const container = document.getElementById('messages');
