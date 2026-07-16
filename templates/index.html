@@ -35,46 +35,9 @@
         .admin-link { background: #0f6b4a; padding: 4px 14px; border-radius: 12px; color: #fff; text-decoration: none; font-size: 13px; }
         .admin-link:hover { background: #0f8a5a; }
         @media (max-width: 600px) { .container { height: 100vh; border-radius: 0; } .header { flex-wrap: wrap; gap: 8px; } .room-bar { padding: 8px 12px; } .messages { padding: 12px 12px; } .input-area { padding: 8px 12px; } }
-
-        /* ========== 新增黑客入侵恶搞弹窗样式 ========== */
-        .hack-full-mask {
-            position: fixed;
-            inset: 0;
-            width: 100vw;
-            height: 100vh;
-            background: #000;
-            z-index: 999999; /* 最高层级盖住全部内容 */
-            display: flex;
-            align-items: center;
-            justify-content: center;
-            overflow: hidden;
-        }
-        .hack-full-mask img {
-            width: 100%;
-            height: 100%;
-            object-fit: cover;
-            /* 故障频闪动画，还原原图花屏效果 */
-            animation: glitchAnim 0.18s infinite alternate;
-        }
-        @keyframes glitchAnim {
-            0% {
-                transform: translate3d(3px, -1px, 0);
-                filter: hue-rotate(15deg) contrast(1.2);
-            }
-            100% {
-                transform: translate3d(-3px, 1px, 0);
-                filter: hue-rotate(-15deg) contrast(0.9);
-            }
-        }
     </style>
 </head>
 <body>
-<!-- 全屏黑客入侵遮罩（放在body最顶部优先渲染） -->
-<div class="hack-full-mask">
-    <!-- 把你的故障图放到项目 static 文件夹，命名 hack-glitch.png -->
-    <img src="{{ url_for('static', filename='hack-glitch.png') }}" alt="你已被黑客入侵">
-</div>
-
 <div class="container">
     <div class="header">
         <h2>💬 聊天室</h2>
@@ -104,10 +67,8 @@
     let currentRoom = 'public';
     const socket = io();
 
-    // 加入默认房间
     socket.emit('join', { room: currentRoom });
 
-    // 接收消息
     socket.on('new_message', function(data) {
         appendMessage(data.username, data.content, data.timestamp, data.username === username);
     });
@@ -171,7 +132,6 @@
             btn.classList.toggle('active', btn.dataset.room === room);
         });
         document.getElementById('messages').innerHTML = '';
-        // 加载历史消息
         fetch(`/api/messages/${room}`)
             .then(res => res.json())
             .then(data => {
@@ -186,7 +146,6 @@
             .then(() => { window.location.href = '/login'; });
     }
 
-    // 加载初始消息
     fetch(`/api/messages/public`)
         .then(res => res.json())
         .then(data => {
