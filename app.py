@@ -24,7 +24,6 @@ socketio = SocketIO(app, cors_allowed_origins="*", async_mode="threading", logge
 DB_PATH = 'chatroom.db'
 user_send_time = {}
 RATE_LIMIT_SECONDS = 1.5
-# 注册限流：同一IP每分钟最多注册1次
 register_ip_limit = defaultdict(int)
 register_ip_reset = defaultdict(float)
 REGISTER_LIMIT = 1
@@ -79,7 +78,7 @@ def init_db():
         )
     ''')
     
-    # 仅创建 yingMC 管理员
+    # 仅初始化 yingMC 为管理员，不再创建 admin 用户
     admin_pwd = hashlib.sha256('admin123'.encode()).hexdigest()
     try:
         c.execute('INSERT INTO users (username, password, is_admin) VALUES (?, ?, 1)', ('yingMC', admin_pwd))
@@ -110,7 +109,6 @@ def get_real_ip():
         ip = request.remote_addr
     return ip
 
-# 检查IP/设备是否在黑名单
 def is_ip_or_device_banned():
     device_id = request.cookies.get("device_id","")
     ip = get_real_ip()
@@ -123,7 +121,6 @@ def is_ip_or_device_banned():
         print("ban check error:", e)
         return False
 
-# 注册IP限流
 def check_register_limit(ip):
     now = time.time()
     if now - register_ip_reset[ip] > REGISTER_LIMIT_SEC:
@@ -149,6 +146,21 @@ def owner_required(f):
             return jsonify({"error":"仅yingMC可执行本操作"}),403
         return f(*args,**kwargs)
     return decorated
+
+# 一次性清理接口（执行后务必删除）
+@app.route('/api/fix_admin', methods=['POST'])
+@owner_required
+def fix_admin():
+    conn = get_db()
+    # 删除 admin 用户
+    conn.execute("DELETE FROM users WHERE username = 'admin'")
+    # yingMC 设置为管理员
+    conn.execute("UPDATE users SET is_admin = 1 WHERE username = 'yingMC'")
+    # 其他用户取消管理员权限
+    conn.execute("UPDATE users SET is_admin = 0 WHERE username != 'yingMC'")
+    conn.commit()
+    conn.close()
+    return jsonify({"success":True, "msg":"admin已删除，yingMC设为唯一管理员"})
 
 @app.route('/')
 def index():
@@ -209,10 +221,8 @@ def login():
 @app.route('/api/register', methods=['POST'])
 def register():
     ip = get_real_ip()
-    # 黑名单直接拦截注册
     if is_ip_or_device_banned():
         return jsonify({"error": "该设备/IP已被封禁，禁止注册"}),403
-    # 注册频率限制
     if not check_register_limit(ip):
         return jsonify({"error": "注册过于频繁，请稍后再试"}),429
     data = request.get_json()
