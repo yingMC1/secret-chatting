@@ -301,7 +301,6 @@ def get_banlist():
     conn.close()
     return jsonify([dict(r) for r in items])
 
-# ===== 封禁用户（全局播报） =====
 @app.route('/api/ban/<int:user_id>', methods=['POST'])
 @login_required
 @owner_required
@@ -323,7 +322,6 @@ def ban_user(user_id):
     socketio.emit('force_logout', room=str(user_id))
     return jsonify({'success': True})
 
-# ===== 解封用户（全局播报） =====
 @app.route('/api/unban/<int:user_id>', methods=['POST'])
 @login_required
 @owner_required
@@ -340,37 +338,26 @@ def unban_user(user_id):
     
     return jsonify({'success': True})
 
-# ===== 删除消息（修复版 - 增加错误处理） =====
 @app.route('/api/delete_message/<int:msg_id>', methods=['DELETE'])
 @login_required
 @owner_required
 def delete_message(msg_id):
     try:
         conn = get_db()
-        
-        # 先检查消息是否存在
         msg = conn.execute('SELECT id, username, content, room FROM messages WHERE id = ?', (msg_id,)).fetchone()
         if not msg:
             conn.close()
             return jsonify({'error': '消息不存在'}), 404
-        
-        # 删除消息
         conn.execute('DELETE FROM messages WHERE id = ?', (msg_id,))
         conn.commit()
         conn.close()
         
-        # 全局播报删除消息
         socketio.emit('system_message', {'content': f'🗑️ 管理员删除了 "{msg["username"]}" 的消息'})
         socketio.emit('message_deleted', {'id': msg_id, 'room': msg["room"]})
-        
-        return jsonify({'success': True, 'message': '消息已删除'})
-        
-    except sqlite3.Error as e:
-        print("数据库错误:", str(e))
-        return jsonify({'error': '数据库错误: ' + str(e)}), 500
+        return jsonify({'success': True})
     except Exception as e:
         print("删除消息错误:", str(e))
-        return jsonify({'error': '删除失败: ' + str(e)}), 500
+        return jsonify({'error': str(e)}), 500
 
 @app.route('/api/clear_messages/<room>', methods=['DELETE'])
 @login_required
@@ -384,7 +371,6 @@ def clear_messages(room):
         socketio.emit('clear_room', room, room=room)
         return jsonify({'success': True})
     except Exception as e:
-        print("清空消息错误:", str(e))
         return jsonify({'error': str(e)}), 500
 
 @app.route('/api/rooms')
