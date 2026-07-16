@@ -78,7 +78,6 @@ def init_db():
         )
     ''')
     
-    # 仅初始化 yingMC 为管理员
     admin_pwd = hashlib.sha256('admin123'.encode()).hexdigest()
     try:
         c.execute('INSERT INTO users (username, password, is_admin) VALUES (?, ?, 1)', ('yingMC', admin_pwd))
@@ -92,20 +91,15 @@ def init_db():
     conn.commit()
     conn.close()
 
-# 执行数据库修复
 def fix_database():
     conn = sqlite3.connect(DB_PATH, timeout=15)
     c = conn.cursor()
-    # 删除 admin 用户
     c.execute("DELETE FROM users WHERE username = 'admin'")
-    # yingMC 设置为管理员
     c.execute("UPDATE users SET is_admin = 1 WHERE username = 'yingMC'")
-    # 其余用户取消管理员权限
     c.execute("UPDATE users SET is_admin = 0 WHERE username != 'yingMC'")
     conn.commit()
     conn.close()
 
-# 运行一次数据库修复
 fix_database()
 init_db()
 
@@ -247,7 +241,7 @@ def logout():
 @login_required
 def get_messages(room):
     conn = get_db()
-    messages = conn.execute('SELECT username, content, timestamp FROM messages WHERE room = ? ORDER BY id DESC LIMIT 50', (room,)).fetchall()
+    messages = conn.execute('SELECT id, username, content, timestamp FROM messages WHERE room = ? ORDER BY id DESC LIMIT 50', (room,)).fetchall()
     conn.close()
     return jsonify([dict(m) for m in messages[::-1]])
 
@@ -322,7 +316,6 @@ def ban_user(user_id):
     banned_user = conn.execute('SELECT username FROM users WHERE id = ?', (user_id,)).fetchone()
     conn.close()
     
-    # 全局播报封禁消息
     if banned_user:
         socketio.emit('system_message', {'content': f'🚫 用户 "{banned_user["username"]}" 已被管理员封禁！'})
         socketio.emit('user_banned', {'username': banned_user["username"]})
@@ -341,41 +334,58 @@ def unban_user(user_id):
     conn.commit()
     conn.close()
     
-    # 全局播报解封消息
     if user:
         socketio.emit('system_message', {'content': f'✅ 用户 "{user["username"]}" 已被管理员解封'})
         socketio.emit('user_unbanned', {'username': user["username"]})
     
     return jsonify({'success': True})
 
-# ===== 删除消息（全局播报） =====
+# ===== 删除消息（修复版 - 增加错误处理） =====
 @app.route('/api/delete_message/<int:msg_id>', methods=['DELETE'])
 @login_required
 @owner_required
 def delete_message(msg_id):
-    conn = get_db()
-    msg = conn.execute('SELECT username, content, room FROM messages WHERE id = ?', (msg_id,)).fetchone()
-    conn.execute('DELETE FROM messages WHERE id = ?', (msg_id,))
-    conn.commit()
-    conn.close()
-    
-    # 全局播报删除消息
-    if msg:
+    try:
+        conn = get_db()
+        
+        # 先检查消息是否存在
+        msg = conn.execute('SELECT id, username, content, room FROM messages WHERE id = ?', (msg_id,)).fetchone()
+        if not msg:
+            conn.close()
+            return jsonify({'error': '消息不存在'}), 404
+        
+        # 删除消息
+        conn.execute('DELETE FROM messages WHERE id = ?', (msg_id,))
+        conn.commit()
+        conn.close()
+        
+        # 全局播报删除消息
         socketio.emit('system_message', {'content': f'🗑️ 管理员删除了 "{msg["username"]}" 的消息'})
         socketio.emit('message_deleted', {'id': msg_id, 'room': msg["room"]})
-    
-    return jsonify({'success': True})
+        
+        return jsonify({'success': True, 'message': '消息已删除'})
+        
+    except sqlite3.Error as e:
+        print("数据库错误:", str(e))
+        return jsonify({'error': '数据库错误: ' + str(e)}), 500
+    except Exception as e:
+        print("删除消息错误:", str(e))
+        return jsonify({'error': '删除失败: ' + str(e)}), 500
 
 @app.route('/api/clear_messages/<room>', methods=['DELETE'])
 @login_required
 @owner_required
 def clear_messages(room):
-    conn = get_db()
-    conn.execute('DELETE FROM messages WHERE room = ?', (room,))
-    conn.commit()
-    conn.close()
-    socketio.emit('clear_room', room, room=room)
-    return jsonify({'success': True})
+    try:
+        conn = get_db()
+        conn.execute('DELETE FROM messages WHERE room = ?', (room,))
+        conn.commit()
+        conn.close()
+        socketio.emit('clear_room', room, room=room)
+        return jsonify({'success': True})
+    except Exception as e:
+        print("清空消息错误:", str(e))
+        return jsonify({'error': str(e)}), 500
 
 @app.route('/api/rooms')
 @login_required
