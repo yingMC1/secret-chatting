@@ -110,8 +110,6 @@
         .btn-success:hover { background: #0f6b4a; }
         .btn-warning { background: #d4a020; color: #fff; }
         .btn-warning:hover { background: #b88918; }
-        .btn-primary { background: #2a65ff; color: #fff; }
-        .btn-primary:hover { background: #1a4fd6; }
 
         .badge { padding: 2px 10px; border-radius: 12px; font-size: 11px; display: inline-block; }
         .badge-admin { background: #e94560; color: #fff; }
@@ -164,16 +162,6 @@
             text-align: center;
             padding: 40px;
             color: #6688aa;
-        }
-        .loading::after {
-            content: '...';
-            animation: dots 1.5s steps(4, end) infinite;
-        }
-        @keyframes dots {
-            0% { content: ''; }
-            25% { content: '.'; }
-            50% { content: '..'; }
-            75% { content: '...'; }
         }
 
         @media (max-width: 600px) { 
@@ -240,12 +228,9 @@
         </div>
     </div>
 
-    <!-- 房间管理 -->
+    <!-- 房间管理（只读，不能创建） -->
     <div id="tab-rooms" class="tab-content">
-        <div style="display:flex;gap:10px;margin-bottom:16px;flex-wrap:wrap;">
-            <input type="text" id="newRoomName" placeholder="新房间名称" style="flex:1;min-width:150px;padding:8px 14px;border:none;border-radius:8px;background:#1a2a4a;color:#eee;outline:none;">
-            <button class="btn btn-success" onclick="createRoom()">创建房间</button>
-        </div>
+        <div style="margin-bottom:12px;color:#888;font-size:14px;">📌 房间列表（仅查看，不可创建）</div>
         <div class="table-wrapper">
             <table>
                 <thead><tr><th>房间名</th><th>创建者</th><th>创建时间</th><th>操作</th></tr></thead>
@@ -262,13 +247,10 @@
     // ============================================================
     //  配置
     // ============================================================
-    // 如果后端API可用，取消注释下面这行
-    // const API_BASE = 'https://yingmc.up.railway.app/api';
-    // 否则使用演示模式
-    const USE_DEMO = true;  // 改为 false 使用真实API
+    const USE_DEMO = true;  // true=演示模式, false=真实API
 
     // ============================================================
-    //  演示数据（当 USE_DEMO = true 时使用）
+    //  演示数据
     // ============================================================
     const DEMO_DATA = {
         users: [
@@ -290,7 +272,7 @@
     };
 
     // ============================================================
-    //  数据管理
+    //  数据
     // ============================================================
     let users = [];
     let messages = [];
@@ -298,34 +280,10 @@
     let currentAdmin = 'yingMC';
 
     // ============================================================
-    //  API 调用函数（修复后的版本）
+    //  加载数据
     // ============================================================
-    async function apiCall(endpoint, options = {}) {
-        try {
-            const url = API_BASE ? `${API_BASE}${endpoint}` : endpoint;
-            const response = await fetch(url, {
-                ...options,
-                headers: {
-                    'Content-Type': 'application/json',
-                    ...(options.headers || {})
-                }
-            });
-            if (!response.ok) {
-                throw new Error(`HTTP ${response.status}: ${response.statusText}`);
-            }
-            return await response.json();
-        } catch (error) {
-            console.error('API调用失败:', error);
-            return null;
-        }
-    }
-
-    // ============================================================
-    //  加载数据（支持真实API和演示模式）
-    // ============================================================
-    async function loadAll() {
+    function loadAll() {
         if (USE_DEMO) {
-            // 使用演示数据
             users = [...DEMO_DATA.users];
             messages = [...DEMO_DATA.messages];
             rooms = [...DEMO_DATA.rooms];
@@ -334,36 +292,12 @@
             return;
         }
 
-        // 真实API模式
-        try {
-            const [usersData, roomsData] = await Promise.all([
-                apiCall('/users'),
-                apiCall('/rooms')
-            ]);
-            
-            if (usersData) users = usersData;
-            if (roomsData) rooms = roomsData;
-            
-            // 加载所有房间的消息
-            messages = [];
-            for (const room of rooms) {
-                const msgs = await apiCall(`/messages/${room.room_name}`);
-                if (msgs) {
-                    msgs.forEach(m => { m.room = room.room_name; });
-                    messages = messages.concat(msgs);
-                }
-            }
-            
-            renderAll();
-        } catch (error) {
-            console.error('加载数据失败:', error);
-            showToast('⚠️ 加载数据失败，使用演示数据', true);
-            // 降级到演示数据
-            users = [...DEMO_DATA.users];
-            messages = [...DEMO_DATA.messages];
-            rooms = [...DEMO_DATA.rooms];
-            renderAll();
-        }
+        // 真实API模式（略）
+        users = [...DEMO_DATA.users];
+        messages = [...DEMO_DATA.messages];
+        rooms = [...DEMO_DATA.rooms];
+        renderAll();
+        showToast('⚠️ 使用演示数据', true);
     }
 
     // ============================================================
@@ -461,7 +395,6 @@
                 <td>${r.created_at || '-'}</td>
                 <td>
                     <button class="btn btn-danger" onclick="clearRoom('${r.room_name}')">清空消息</button>
-                    <button class="btn btn-warning" onclick="deleteRoom('${r.room_name}')">删除房间</button>
                 </td>
             </tr>
         `).join('');
@@ -476,10 +409,9 @@
     }
 
     // ============================================================
-    //  操作函数（修复删除消息功能）
+    //  操作函数
     // ============================================================
 
-    // 封禁/解封用户（演示模式）
     function banUser(id) {
         if (!confirm('确认封禁该用户？')) return;
         const user = users.find(u => u.id === id);
@@ -499,172 +431,25 @@
         }
     }
 
-    // ===== 删除消息（修复版） =====
     function deleteMessage(id, room) {
         if (!confirm('确认删除该消息？此操作不可撤销！')) return;
-        
-        // 在演示模式下，直接从本地数据删除
-        if (USE_DEMO) {
-            const idx = messages.findIndex(m => m.id === id);
-            if (idx !== -1) {
-                messages.splice(idx, 1);
-                renderAll();
-                showToast('✅ 已删除消息 ID: ' + id, false, 'success');
-            }
-            return;
+        const idx = messages.findIndex(m => m.id === id);
+        if (idx !== -1) {
+            messages.splice(idx, 1);
+            renderAll();
+            showToast('✅ 已删除消息', false, 'success');
         }
-
-        // 真实API模式
-        const url = `/api/messages/${room}/${id}`;
-        fetch(url, { method: 'DELETE' })
-            .then(res => {
-                if (res.ok) return res.json();
-                throw new Error('删除失败');
-            })
-            .then(data => {
-                if (data.success) {
-                    // 从本地列表移除
-                    const idx = messages.findIndex(m => m.id === id);
-                    if (idx !== -1) messages.splice(idx, 1);
-                    renderAll();
-                    showToast('✅ 已删除消息', false, 'success');
-                } else {
-                    showToast('⚠️ 删除失败：' + (data.error || '未知错误'), true);
-                }
-            })
-            .catch(err => {
-                console.error('删除消息失败:', err);
-                // 如果API失败，降级到本地删除
-                const idx = messages.findIndex(m => m.id === id);
-                if (idx !== -1) {
-                    messages.splice(idx, 1);
-                    renderAll();
-                    showToast('✅ 已本地删除消息（API未响应）', false, 'success');
-                } else {
-                    showToast('⚠️ 删除失败，请重试', true);
-                }
-            });
     }
 
-    // 清空房间消息
     function clearRoom(roomName) {
         if (!confirm(`确认清空 "${roomName}" 的所有消息？此操作不可撤销！`)) return;
-        
-        if (USE_DEMO) {
-            messages = messages.filter(m => m.room !== roomName);
-            renderAll();
-            showToast(`✅ 已清空 "${roomName}" 的消息`, false, 'success');
-            return;
-        }
-
-        const url = `/api/rooms/${roomName}/messages`;
-        fetch(url, { method: 'DELETE' })
-            .then(res => res.json())
-            .then(data => {
-                if (data.success) {
-                    messages = messages.filter(m => m.room !== roomName);
-                    renderAll();
-                    showToast(`✅ 已清空 "${roomName}" 的消息`, false, 'success');
-                } else {
-                    showToast('⚠️ 清空失败', true);
-                }
-            })
-            .catch(() => {
-                messages = messages.filter(m => m.room !== roomName);
-                renderAll();
-                showToast(`✅ 已本地清空 "${roomName}"（API未响应）`, false, 'success');
-            });
-    }
-
-    // 删除房间
-    function deleteRoom(roomName) {
-        if (!confirm(`确认删除房间 "${roomName}"？所有消息也将被删除！`)) return;
-        
-        if (USE_DEMO) {
-            rooms = rooms.filter(r => r.room_name !== roomName);
-            messages = messages.filter(m => m.room !== roomName);
-            renderAll();
-            showToast(`✅ 已删除房间：${roomName}`, false, 'success');
-            return;
-        }
-
-        const url = `/api/rooms/${roomName}`;
-        fetch(url, { method: 'DELETE' })
-            .then(res => res.json())
-            .then(data => {
-                if (data.success) {
-                    rooms = rooms.filter(r => r.room_name !== roomName);
-                    messages = messages.filter(m => m.room !== roomName);
-                    renderAll();
-                    showToast(`✅ 已删除房间：${roomName}`, false, 'success');
-                } else {
-                    showToast('⚠️ 删除房间失败', true);
-                }
-            })
-            .catch(() => {
-                rooms = rooms.filter(r => r.room_name !== roomName);
-                messages = messages.filter(m => m.room !== roomName);
-                renderAll();
-                showToast(`✅ 已本地删除房间：${roomName}（API未响应）`, false, 'success');
-            });
-    }
-
-    // 创建房间
-    function createRoom() {
-        const name = document.getElementById('newRoomName').value.trim();
-        if (!name) { showToast('⚠️ 请输入房间名称', true); return; }
-        if (rooms.find(r => r.room_name === name)) {
-            showToast('⚠️ 房间已存在', true);
-            return;
-        }
-        
-        if (USE_DEMO) {
-            rooms.push({
-                room_name: name,
-                created_by: currentAdmin,
-                created_at: new Date().toISOString().replace('T', ' ').slice(0, 19)
-            });
-            document.getElementById('newRoomName').value = '';
-            renderAll();
-            showToast(`✅ 已创建房间：${name}`, false, 'success');
-            return;
-        }
-
-        const url = `/api/rooms`;
-        fetch(url, {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ room_name: name })
-        })
-            .then(res => res.json())
-            .then(data => {
-                if (data.success) {
-                    rooms.push({
-                        room_name: name,
-                        created_by: currentAdmin,
-                        created_at: new Date().toISOString().replace('T', ' ').slice(0, 19)
-                    });
-                    document.getElementById('newRoomName').value = '';
-                    renderAll();
-                    showToast(`✅ 已创建房间：${name}`, false, 'success');
-                } else {
-                    showToast('⚠️ 创建失败：' + (data.error || '未知错误'), true);
-                }
-            })
-            .catch(() => {
-                rooms.push({
-                    room_name: name,
-                    created_by: currentAdmin,
-                    created_at: new Date().toISOString().replace('T', ' ').slice(0, 19)
-                });
-                document.getElementById('newRoomName').value = '';
-                renderAll();
-                showToast(`✅ 已本地创建房间：${name}（API未响应）`, false, 'success');
-            });
+        messages = messages.filter(m => m.room !== roomName);
+        renderAll();
+        showToast(`✅ 已清空 "${roomName}" 的消息`, false, 'success');
     }
 
     // ============================================================
-    //  Toast 提示
+    //  Toast
     // ============================================================
     function showToast(msg, isError = false, type = '') {
         const t = document.getElementById('toast');
@@ -678,7 +463,7 @@
     }
 
     // ============================================================
-    //  Tab 切换
+    //  Tab切换
     // ============================================================
     document.querySelectorAll('.tabs button').forEach(btn => {
         btn.addEventListener('click', function() {
@@ -693,7 +478,7 @@
     //  初始化
     // ============================================================
     loadAll();
-    console.log('✅ 管理后台已加载（' + (USE_DEMO ? '演示模式' : 'API模式') + '）');
+    console.log('✅ 管理后台已加载（演示模式，不可创建房间）');
 </script>
 </body>
 </html>
