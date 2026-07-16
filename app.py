@@ -1,3 +1,7 @@
+# 【必须放在所有导入最前面】gevent猴子补丁，解决worker直接被杀
+from gevent import monkey
+monkey.patch_all()
+
 # -*- coding: utf-8 -*-
 from flask import Flask, render_template, request, jsonify, session, redirect, url_for
 from flask_socketio import SocketIO, send, emit, join_room, leave_room
@@ -6,6 +10,7 @@ import sqlite3
 import hashlib
 import json
 import os
+from datetime import datetime  # 补充缺失导入
 from flask_cors import CORS
 
 app = Flask(__name__)
@@ -18,6 +23,9 @@ socketio = SocketIO(app, cors_allowed_origins="*", async_mode="gevent")
 DB_PATH = 'chatroom.db'
 
 def init_db():
+    # 优化：数据库已存在则跳过初始化，避免SQLite文件锁冲突
+    if os.path.exists(DB_PATH):
+        return
     conn = sqlite3.connect(DB_PATH)
     c = conn.cursor()
     
@@ -74,7 +82,7 @@ init_db()
 
 # ============ 辅助函数 ============
 def get_db():
-    conn = sqlite3.connect(DB_PATH)
+    conn = sqlite3.connect(DB_PATH, check_same_thread=False)
     conn.row_factory = sqlite3.Row
     return conn
 
@@ -293,4 +301,6 @@ def handle_admin_message(data):
 
 # ============ 启动 ============
 if __name__ == '__main__':
-    socketio.run(app, host='0.0.0.0', port=5000, debug=False)
+    # 读取Railway自动分配端口
+    port = int(os.environ.get("PORT", 5000))
+    socketio.run(app, host='0.0.0.0', port=port, debug=False)
