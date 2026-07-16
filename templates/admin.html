@@ -328,13 +328,13 @@
             </div>
         </div>
 
+        <!-- ===== 消息管理面板：移除清空消息按钮 ===== -->
         <div class="panel">
             <div class="panel-header">
                 <span>💬 消息管理</span>
                 <span class="badge">public 房间</span>
             </div>
             <div style="padding: 20px; display: flex; gap: 15px; flex-wrap: wrap;">
-                <button class="btn btn-danger" onclick="clearAllMessages()">🗑️ 清空所有消息</button>
                 <button class="btn btn-info" onclick="refreshMessages()">🔄 刷新消息</button>
             </div>
             <div class="table-wrapper">
@@ -408,7 +408,6 @@
                         if (isOwner) {
                             actions = '<span style="color:#e94560;font-size:12px;font-weight:bold;">🔒 不可操作</span>';
                         } else {
-                            // ===== 允许管理员操作自己（包括撤销自己的管理员权限）=====
                             if (user.is_banned) {
                                 actions +=
                                 `<button class="btn btn-success btn-sm" onclick="unbanUser(${user.id})">解封</button>`;
@@ -420,7 +419,7 @@
                                 actions +=
                                     `<button class="btn btn-warning btn-sm" onclick="makeAdmin(${user.id})">设为管理</button>`;
                             } else {
-                                // ===== 撤销管理员权限：允许管理员撤销自己 =====
+                                // 允许管理员撤销自己的权限
                                 actions +=
                                     `<button class="btn btn-info btn-sm" onclick="revokeAdmin(${user.id})">撤销管理</button>`;
                             }
@@ -516,7 +515,6 @@
                 .catch(() => showToast('❌ 请求失败', 'error'));
         }
 
-        // ===== 关键修复：撤销管理员权限（允许撤销自己）=====
         function revokeAdmin(userId) {
             // 只禁止撤销 yingMC
             fetch('/api/users', { credentials: 'include' })
@@ -527,7 +525,7 @@
                         showToast('❌ 不能撤销所有者 yingMC 的管理员权限', 'error');
                         return;
                     }
-                    // 允许撤销自己，不拦截
+                    // 允许撤销自己
                     if (!confirm('⚠️ 确定要撤销该用户的管理员权限吗？')) return;
                     fetch(`/api/revoke_admin/${userId}`, { method: 'POST', credentials: 'include' })
                         .then(r => r.json())
@@ -565,17 +563,7 @@
                 .catch(() => showToast('❌ 请求失败', 'error'));
         }
 
-        // ===== 关键修复：清空消息功能已启用 =====
-        function clearAllMessages() {
-            if (!confirm('⚠️ 确定要清空所有消息吗？此操作不可恢复！')) return;
-            fetch('/api/clear_messages/public', { method: 'DELETE', credentials: 'include' })
-                .then(r => r.json())
-                .then(data => {
-                    if (data.success) { showToast('✅ 所有消息已清空', 'success');
-                        loadMessages(); } else { showToast('❌ ' + (data.error || '清空失败'), 'error'); }
-                })
-                .catch(() => showToast('❌ 请求失败', 'error'));
-        }
+        // ===== 清空消息功能已移除 =====
 
         function refreshData() { loadUsers();
             loadOnlineCount();
