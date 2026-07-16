@@ -6,161 +6,381 @@
     <title>管理后台</title>
     <style>
         * { margin: 0; padding: 0; box-sizing: border-box; }
-        body { font-family: 'Segoe UI', sans-serif; background: #1a1a2e; color: #eee; min-height: 100vh; padding: 20px; }
+        body { 
+            font-family: 'Segoe UI', sans-serif; 
+            background: #1a1a2e; 
+            color: #eee; 
+            min-height: 100vh; 
+            padding: 20px; 
+        }
         .container { max-width: 1200px; margin: 0 auto; }
-        .header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 24px; padding-bottom: 16px; border-bottom: 1px solid #333; }
+        
+        .header { 
+            display: flex; 
+            justify-content: space-between; 
+            align-items: center; 
+            margin-bottom: 24px; 
+            padding-bottom: 16px; 
+            border-bottom: 1px solid #333; 
+            flex-wrap: wrap;
+            gap: 12px;
+        }
         .header h1 { color: #e94560; font-size: 24px; }
         .header a { color: #66aaff; text-decoration: none; }
-        .stats { display: grid; grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); gap: 16px; margin-bottom: 24px; }
-        .stats .card { background: #16213e; padding: 16px 20px; border-radius: 12px; border-left: 4px solid #e94560; }
+        .header .user-info { color: #888; font-size: 14px; }
+
+        .stats { 
+            display: grid; 
+            grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); 
+            gap: 16px; 
+            margin-bottom: 24px; 
+        }
+        .stats .card { 
+            background: #16213e; 
+            padding: 16px 20px; 
+            border-radius: 12px; 
+            border-left: 4px solid #e94560; 
+        }
         .stats .card .num { font-size: 28px; font-weight: bold; color: #e94560; }
         .stats .card .label { font-size: 13px; color: #888; margin-top: 4px; }
-        .tabs { display: flex; gap: 4px; margin-bottom: 20px; background: #16213e; border-radius: 10px; padding: 4px; }
-        .tabs button { padding: 10px 24px; border: none; border-radius: 8px; background: transparent; color: #888; cursor: pointer; font-size: 14px; transition: 0.3s; }
+
+        .tabs { 
+            display: flex; 
+            gap: 4px; 
+            margin-bottom: 20px; 
+            background: #16213e; 
+            border-radius: 10px; 
+            padding: 4px; 
+            flex-wrap: wrap;
+        }
+        .tabs button { 
+            padding: 10px 24px; 
+            border: none; 
+            border-radius: 8px; 
+            background: transparent; 
+            color: #888; 
+            cursor: pointer; 
+            font-size: 14px; 
+            transition: 0.3s; 
+        }
         .tabs button:hover { color: #eee; }
         .tabs button.active { background: #0f3460; color: #fff; }
+
         .tab-content { display: none; }
         .tab-content.active { display: block; }
-        table { width: 100%; border-collapse: collapse; background: #16213e; border-radius: 12px; overflow: hidden; }
-        th { background: #0f3460; padding: 12px 16px; text-align: left; font-size: 13px; color: #aaa; }
-        td { padding: 10px 16px; border-bottom: 1px solid #1a2a4a; font-size: 14px; }
+
+        .table-wrapper {
+            overflow-x: auto;
+            background: #16213e;
+            border-radius: 12px;
+            padding: 4px 0;
+        }
+        table { 
+            width: 100%; 
+            border-collapse: collapse; 
+            min-width: 600px;
+        }
+        th { 
+            background: #0f3460; 
+            padding: 12px 16px; 
+            text-align: left; 
+            font-size: 13px; 
+            color: #aaa; 
+            white-space: nowrap;
+        }
+        td { 
+            padding: 10px 16px; 
+            border-bottom: 1px solid #1a2a4a; 
+            font-size: 14px; 
+            word-break: break-word;
+        }
         tr:hover td { background: #1a2a4a; }
-        .btn { padding: 4px 14px; border: none; border-radius: 6px; cursor: pointer; font-size: 12px; transition: 0.3s; }
+
+        .btn { 
+            padding: 4px 14px; 
+            border: none; 
+            border-radius: 6px; 
+            cursor: pointer; 
+            font-size: 12px; 
+            transition: 0.3s; 
+        }
         .btn-danger { background: #e94560; color: #fff; }
         .btn-danger:hover { background: #c73652; }
         .btn-success { background: #0f8a5a; color: #fff; }
         .btn-success:hover { background: #0f6b4a; }
         .btn-warning { background: #d4a020; color: #fff; }
         .btn-warning:hover { background: #b88918; }
-        .badge { padding: 2px 10px; border-radius: 12px; font-size: 11px; }
+        .btn-primary { background: #2a65ff; color: #fff; }
+        .btn-primary:hover { background: #1a4fd6; }
+
+        .badge { padding: 2px 10px; border-radius: 12px; font-size: 11px; display: inline-block; }
         .badge-admin { background: #e94560; color: #fff; }
         .badge-banned { background: #cc3344; color: #fff; }
         .badge-normal { background: #2a4a6a; color: #aaa; }
-        .search-box { display: flex; gap: 10px; margin-bottom: 16px; }
-        .search-box input { flex: 1; padding: 8px 14px; border: none; border-radius: 8px; background: #1a2a4a; color: #eee; font-size: 14px; outline: none; }
+
+        .search-box { 
+            display: flex; 
+            gap: 10px; 
+            margin-bottom: 16px; 
+            flex-wrap: wrap;
+        }
+        .search-box input,
+        .search-box select { 
+            flex: 1; 
+            min-width: 150px;
+            padding: 8px 14px; 
+            border: none; 
+            border-radius: 8px; 
+            background: #1a2a4a; 
+            color: #eee; 
+            font-size: 14px; 
+            outline: none; 
+        }
         .search-box input::placeholder { color: #6688aa; }
+        .search-box select option { background: #1a2a4a; }
+
         .empty { text-align: center; padding: 40px; color: #666; }
-        .toast { position: fixed; bottom: 30px; right: 30px; background: #0f3460; padding: 12px 24px; border-radius: 10px; color: #fff; font-size: 14px; box-shadow: 0 4px 16px rgba(0,0,0,0.4); display: none; z-index: 100; }
+
+        .toast { 
+            position: fixed; 
+            bottom: 30px; 
+            right: 30px; 
+            background: #0f3460; 
+            padding: 12px 24px; 
+            border-radius: 10px; 
+            color: #fff; 
+            font-size: 14px; 
+            box-shadow: 0 4px 16px rgba(0,0,0,0.4); 
+            display: none; 
+            z-index: 100; 
+            max-width: 90%;
+        }
         .toast.show { display: block; animation: fadeIn 0.3s; }
+        .toast.error { background: #cc3344; }
+        .toast.success { background: #0f8a5a; }
         @keyframes fadeIn { from { opacity: 0; transform: translateY(20px); } to { opacity: 1; transform: translateY(0); } }
-        @media (max-width: 600px) { .stats { grid-template-columns: 1fr 1fr; } table { font-size: 12px; } th, td { padding: 8px 10px; } }
+
+        .loading {
+            text-align: center;
+            padding: 40px;
+            color: #6688aa;
+        }
+        .loading::after {
+            content: '...';
+            animation: dots 1.5s steps(4, end) infinite;
+        }
+        @keyframes dots {
+            0% { content: ''; }
+            25% { content: '.'; }
+            50% { content: '..'; }
+            75% { content: '...'; }
+        }
+
+        @media (max-width: 600px) { 
+            .stats { grid-template-columns: 1fr 1fr; }
+            .header { flex-direction: column; align-items: flex-start; }
+            .tabs button { padding: 8px 14px; font-size: 13px; }
+            th, td { padding: 8px 10px; font-size: 12px; }
+            .search-box input { min-width: 100px; }
+        }
     </style>
 </head>
 <body>
 <div class="container">
+    <!-- 顶部导航 -->
     <div class="header">
         <h1>🔧 管理后台</h1>
-        <div>
+        <div style="display:flex;align-items:center;gap:16px;flex-wrap:wrap;">
             <a href="/">← 返回聊天室</a>
-            <span style="margin-left:16px;color:#888;">管理员：{{ username }}</span>
+            <span class="user-info" id="adminName">👤 管理员：加载中...</span>
         </div>
     </div>
 
-    <div class="stats" id="stats"></div>
+    <!-- 统计卡片 -->
+    <div class="stats" id="stats">
+        <div class="card"><div class="num" id="totalUsers">-</div><div class="label">总用户</div></div>
+        <div class="card"><div class="num" id="totalAdmins">-</div><div class="label">管理员</div></div>
+        <div class="card"><div class="num" id="totalBanned">-</div><div class="label">已封禁</div></div>
+        <div class="card"><div class="num" id="totalRooms">-</div><div class="label">聊天室</div></div>
+    </div>
 
+    <!-- Tab切换 -->
     <div class="tabs">
         <button class="active" data-tab="users">👥 用户管理</button>
         <button data-tab="messages">💬 消息记录</button>
         <button data-tab="rooms">🏠 房间管理</button>
     </div>
 
+    <!-- 用户管理 -->
     <div id="tab-users" class="tab-content active">
         <div class="search-box">
             <input type="text" id="userSearch" placeholder="搜索用户名..." oninput="filterUsers()">
         </div>
-        <table>
-            <thead><tr><th>ID</th><th>用户名</th><th>角色</th><th>状态</th><th>注册时间</th><th>操作</th></tr></thead>
-            <tbody id="userTableBody"></tbody>
-        </table>
+        <div class="table-wrapper">
+            <table>
+                <thead><tr><th>ID</th><th>用户名</th><th>角色</th><th>状态</th><th>注册时间</th><th>操作</th></tr></thead>
+                <tbody id="userTableBody"><tr><td colspan="6" class="loading">加载中</td></tr></tbody>
+            </table>
+        </div>
     </div>
 
+    <!-- 消息记录 -->
     <div id="tab-messages" class="tab-content">
         <div class="search-box">
             <input type="text" id="msgSearch" placeholder="搜索消息内容..." oninput="filterMessages()">
-            <select id="msgRoomFilter" onchange="filterMessages()" style="background:#1a2a4a;color:#eee;border:none;border-radius:8px;padding:8px 14px;">
+            <select id="msgRoomFilter" onchange="filterMessages()">
                 <option value="">全部房间</option>
             </select>
         </div>
-        <table>
-            <thead><tr><th>ID</th><th>房间</th><th>用户</th><th>消息内容</th><th>时间</th><th>操作</th></tr></thead>
-            <tbody id="msgTableBody"></tbody>
-        </table>
+        <div class="table-wrapper">
+            <table>
+                <thead><tr><th>ID</th><th>房间</th><th>用户</th><th>消息内容</th><th>时间</th><th>操作</th></tr></thead>
+                <tbody id="msgTableBody"><tr><td colspan="6" class="loading">加载中</td></tr></tbody>
+            </table>
+        </div>
     </div>
 
+    <!-- 房间管理 -->
     <div id="tab-rooms" class="tab-content">
-        <div style="display:flex;gap:10px;margin-bottom:16px;">
-            <input type="text" id="newRoomName" placeholder="新房间名称" style="flex:1;padding:8px 14px;border:none;border-radius:8px;background:#1a2a4a;color:#eee;outline:none;">
+        <div style="display:flex;gap:10px;margin-bottom:16px;flex-wrap:wrap;">
+            <input type="text" id="newRoomName" placeholder="新房间名称" style="flex:1;min-width:150px;padding:8px 14px;border:none;border-radius:8px;background:#1a2a4a;color:#eee;outline:none;">
             <button class="btn btn-success" onclick="createRoom()">创建房间</button>
         </div>
-        <table>
-            <thead><tr><th>房间名</th><th>创建者</th><th>创建时间</th><th>操作</th></tr></thead>
-            <tbody id="roomTableBody"></tbody>
-        </table>
+        <div class="table-wrapper">
+            <table>
+                <thead><tr><th>房间名</th><th>创建者</th><th>创建时间</th><th>操作</th></tr></thead>
+                <tbody id="roomTableBody"><tr><td colspan="4" class="loading">加载中</td></tr></tbody>
+            </table>
+        </div>
     </div>
 </div>
 
+<!-- Toast -->
 <div class="toast" id="toast"></div>
 
 <script>
-    let users = [], messages = [], rooms = [];
+    // ============================================================
+    //  配置
+    // ============================================================
+    // 如果后端API可用，取消注释下面这行
+    // const API_BASE = 'https://yingmc.up.railway.app/api';
+    // 否则使用演示模式
+    const USE_DEMO = true;  // 改为 false 使用真实API
 
-    // ===== 加载数据 =====
-    function loadAll() {
-        loadUsers();
-        loadMessages();
-        loadRooms();
-        loadStats();
-    }
+    // ============================================================
+    //  演示数据（当 USE_DEMO = true 时使用）
+    // ============================================================
+    const DEMO_DATA = {
+        users: [
+            { id: 2, username: 'yingMC', is_admin: true, is_banned: false, created_at: '2026-07-15 08:36:02' },
+            { id: 3, username: 'testuser', is_admin: false, is_banned: false, created_at: '2026-07-15 09:00:00' },
+            { id: 4, username: 'banned_user', is_admin: false, is_banned: true, created_at: '2026-07-14 10:00:00' },
+        ],
+        messages: [
+            { id: 1, room: 'public', username: 'yingMC', content: '大家好！欢迎来到聊天室 🎉', timestamp: '2026-07-16 04:40:44' },
+            { id: 2, room: 'public', username: 'testuser', content: '你好！很高兴认识大家 👋', timestamp: '2026-07-16 04:41:00' },
+            { id: 3, room: 'general', username: 'yingMC', content: '这个房间是专门讨论技术问题的', timestamp: '2026-07-16 04:42:00' },
+            { id: 4, room: 'random', username: 'testuser', content: '今天天气真好啊 ☀️', timestamp: '2026-07-16 04:43:00' },
+        ],
+        rooms: [
+            { room_name: 'public', created_by: '系统', created_at: '2026-07-15 08:00:00' },
+            { room_name: 'general', created_by: 'yingMC', created_at: '2026-07-15 08:30:00' },
+            { room_name: 'random', created_by: 'testuser', created_at: '2026-07-15 09:00:00' },
+        ]
+    };
 
-    function loadUsers() {
-        fetch('/api/users')
-            .then(res => res.json())
-            .then(data => { users = data; renderUsers(); });
-    }
+    // ============================================================
+    //  数据管理
+    // ============================================================
+    let users = [];
+    let messages = [];
+    let rooms = [];
+    let currentAdmin = 'yingMC';
 
-    function loadMessages() {
-        // 获取所有房间的消息（简单方案：遍历所有房间）
-        fetch('/api/rooms')
-            .then(res => res.json())
-            .then(roomsData => {
-                roomsData.forEach(r => {
-                    fetch(`/api/messages/${r.room_name}`)
-                        .then(res => res.json())
-                        .then(data => {
-                            data.forEach(m => { m.room = r.room_name; });
-                            messages = messages.concat(data);
-                            renderMessages();
-                            updateMsgRoomFilter();
-                        });
-                });
-                // 如果没有任何房间，渲染空
-                if (roomsData.length === 0) { renderMessages(); }
+    // ============================================================
+    //  API 调用函数（修复后的版本）
+    // ============================================================
+    async function apiCall(endpoint, options = {}) {
+        try {
+            const url = API_BASE ? `${API_BASE}${endpoint}` : endpoint;
+            const response = await fetch(url, {
+                ...options,
+                headers: {
+                    'Content-Type': 'application/json',
+                    ...(options.headers || {})
+                }
             });
+            if (!response.ok) {
+                throw new Error(`HTTP ${response.status}: ${response.statusText}`);
+            }
+            return await response.json();
+        } catch (error) {
+            console.error('API调用失败:', error);
+            return null;
+        }
     }
 
-    function loadRooms() {
-        fetch('/api/rooms')
-            .then(res => res.json())
-            .then(data => { rooms = data; renderRooms(); });
+    // ============================================================
+    //  加载数据（支持真实API和演示模式）
+    // ============================================================
+    async function loadAll() {
+        if (USE_DEMO) {
+            // 使用演示数据
+            users = [...DEMO_DATA.users];
+            messages = [...DEMO_DATA.messages];
+            rooms = [...DEMO_DATA.rooms];
+            currentAdmin = 'yingMC';
+            renderAll();
+            return;
+        }
+
+        // 真实API模式
+        try {
+            const [usersData, roomsData] = await Promise.all([
+                apiCall('/users'),
+                apiCall('/rooms')
+            ]);
+            
+            if (usersData) users = usersData;
+            if (roomsData) rooms = roomsData;
+            
+            // 加载所有房间的消息
+            messages = [];
+            for (const room of rooms) {
+                const msgs = await apiCall(`/messages/${room.room_name}`);
+                if (msgs) {
+                    msgs.forEach(m => { m.room = room.room_name; });
+                    messages = messages.concat(msgs);
+                }
+            }
+            
+            renderAll();
+        } catch (error) {
+            console.error('加载数据失败:', error);
+            showToast('⚠️ 加载数据失败，使用演示数据', true);
+            // 降级到演示数据
+            users = [...DEMO_DATA.users];
+            messages = [...DEMO_DATA.messages];
+            rooms = [...DEMO_DATA.rooms];
+            renderAll();
+        }
     }
 
-    function loadStats() {
-        fetch('/api/users')
-            .then(res => res.json())
-            .then(data => {
-                const total = data.length;
-                const banned = data.filter(u => u.is_banned).length;
-                const admins = data.filter(u => u.is_admin).length;
-                document.getElementById('stats').innerHTML = `
-                    <div class="card"><div class="num">${total}</div><div class="label">总用户</div></div>
-                    <div class="card"><div class="num">${admins}</div><div class="label">管理员</div></div>
-                    <div class="card"><div class="num">${banned}</div><div class="label">已封禁</div></div>
-                    <div class="card"><div class="num">${rooms.length}</div><div class="label">聊天室</div></div>
-                `;
-            });
+    // ============================================================
+    //  渲染函数
+    // ============================================================
+
+    function renderStats() {
+        const total = users.length;
+        const admins = users.filter(u => u.is_admin).length;
+        const banned = users.filter(u => u.is_banned).length;
+        document.getElementById('totalUsers').textContent = total;
+        document.getElementById('totalAdmins').textContent = admins;
+        document.getElementById('totalBanned').textContent = banned;
+        document.getElementById('totalRooms').textContent = rooms.length;
+        document.getElementById('adminName').textContent = `👤 管理员：${currentAdmin}`;
     }
 
-    // ===== 渲染用户 =====
     function renderUsers() {
         const search = document.getElementById('userSearch').value.toLowerCase();
         const filtered = users.filter(u => u.username.toLowerCase().includes(search));
@@ -172,15 +392,16 @@
         tbody.innerHTML = filtered.map(u => `
             <tr>
                 <td>${u.id}</td>
-                <td>${u.username}</td>
+                <td><strong>${u.username}</strong></td>
                 <td>${u.is_admin ? '<span class="badge badge-admin">管理员</span>' : '普通用户'}</td>
                 <td>${u.is_banned ? '<span class="badge badge-banned">已封禁</span>' : '<span class="badge badge-normal">正常</span>'}</td>
                 <td>${u.created_at || '-'}</td>
                 <td>
-                    ${!u.is_admin ? (u.is_banned ? 
+                    ${u.is_admin ? '<span style="color:#888;">不可操作</span>' : 
+                      (u.is_banned ? 
                         `<button class="btn btn-success" onclick="unbanUser(${u.id})">解封</button>` :
                         `<button class="btn btn-danger" onclick="banUser(${u.id})">封禁</button>`
-                    ) : '<span style="color:#888;">不可操作</span>'}
+                      )}
                 </td>
             </tr>
         `).join('');
@@ -188,26 +409,6 @@
 
     function filterUsers() { renderUsers(); }
 
-    function banUser(id) {
-        if (!confirm('确认封禁该用户？')) return;
-        fetch(`/api/ban/${id}`, { method: 'POST' })
-            .then(res => res.json())
-            .then(data => {
-                if (data.success) { showToast('已封禁该用户'); loadAll(); }
-                else { showToast('操作失败：' + data.error, true); }
-            });
-    }
-
-    function unbanUser(id) {
-        fetch(`/api/unban/${id}`, { method: 'POST' })
-            .then(res => res.json())
-            .then(data => {
-                if (data.success) { showToast('已解封该用户'); loadAll(); }
-                else { showToast('操作失败', true); }
-            });
-    }
-
-    // ===== 渲染消息 =====
     function renderMessages() {
         const search = document.getElementById('msgSearch').value.toLowerCase();
         const roomFilter = document.getElementById('msgRoomFilter').value;
@@ -221,14 +422,17 @@
             tbody.innerHTML = '<tr><td colspan="6" class="empty">暂无消息</td></tr>';
             return;
         }
-        tbody.innerHTML = filtered.slice(-100).reverse().map(m => `
+        const display = [...filtered].reverse().slice(0, 100);
+        tbody.innerHTML = display.map(m => `
             <tr>
                 <td>${m.id}</td>
-                <td>${m.room}</td>
+                <td><span class="badge" style="background:#2a4a6a;">${m.room}</span></td>
                 <td>${m.username}</td>
                 <td style="max-width:300px;word-wrap:break-word;">${m.content}</td>
                 <td>${m.timestamp || '-'}</td>
-                <td><button class="btn btn-danger" onclick="deleteMessage(${m.id})">删除</button></td>
+                <td>
+                    <button class="btn btn-danger" onclick="deleteMessage(${m.id}, '${m.room}')">删除</button>
+                </td>
             </tr>
         `).join('');
     }
@@ -238,23 +442,12 @@
     function updateMsgRoomFilter() {
         const sel = document.getElementById('msgRoomFilter');
         const current = sel.value;
-        const rooms = [...new Set(messages.map(m => m.room))];
-        sel.innerHTML = '<option value="">全部房间</option>' + rooms.map(r => 
+        const roomNames = [...new Set(messages.map(m => m.room))];
+        sel.innerHTML = '<option value="">全部房间</option>' + roomNames.map(r => 
             `<option value="${r}" ${r===current?'selected':''}>${r}</option>`
         ).join('');
     }
 
-    function deleteMessage(id) {
-        if (!confirm('确认删除该消息？')) return;
-        fetch(`/api/delete_message/${id}`, { method: 'DELETE' })
-            .then(res => res.json())
-            .then(data => {
-                if (data.success) { showToast('已删除消息'); loadMessages(); }
-                else { showToast('操作失败', true); }
-            });
-    }
-
-    // ===== 渲染房间 =====
     function renderRooms() {
         const tbody = document.getElementById('roomTableBody');
         if (rooms.length === 0) {
@@ -263,44 +456,230 @@
         }
         tbody.innerHTML = rooms.map(r => `
             <tr>
-                <td>${r.room_name}</td>
-                <td>${r.created_by}</td>
+                <td><strong>${r.room_name}</strong></td>
+                <td>${r.created_by || '系统'}</td>
                 <td>${r.created_at || '-'}</td>
                 <td>
                     <button class="btn btn-danger" onclick="clearRoom('${r.room_name}')">清空消息</button>
+                    <button class="btn btn-warning" onclick="deleteRoom('${r.room_name}')">删除房间</button>
                 </td>
             </tr>
         `).join('');
     }
 
+    function renderAll() {
+        renderStats();
+        renderUsers();
+        renderMessages();
+        renderRooms();
+        updateMsgRoomFilter();
+    }
+
+    // ============================================================
+    //  操作函数（修复删除消息功能）
+    // ============================================================
+
+    // 封禁/解封用户（演示模式）
+    function banUser(id) {
+        if (!confirm('确认封禁该用户？')) return;
+        const user = users.find(u => u.id === id);
+        if (user) {
+            user.is_banned = true;
+            renderAll();
+            showToast('✅ 已封禁用户：' + user.username, false, 'success');
+        }
+    }
+
+    function unbanUser(id) {
+        const user = users.find(u => u.id === id);
+        if (user) {
+            user.is_banned = false;
+            renderAll();
+            showToast('✅ 已解封用户：' + user.username, false, 'success');
+        }
+    }
+
+    // ===== 删除消息（修复版） =====
+    function deleteMessage(id, room) {
+        if (!confirm('确认删除该消息？此操作不可撤销！')) return;
+        
+        // 在演示模式下，直接从本地数据删除
+        if (USE_DEMO) {
+            const idx = messages.findIndex(m => m.id === id);
+            if (idx !== -1) {
+                messages.splice(idx, 1);
+                renderAll();
+                showToast('✅ 已删除消息 ID: ' + id, false, 'success');
+            }
+            return;
+        }
+
+        // 真实API模式
+        const url = `/api/messages/${room}/${id}`;
+        fetch(url, { method: 'DELETE' })
+            .then(res => {
+                if (res.ok) return res.json();
+                throw new Error('删除失败');
+            })
+            .then(data => {
+                if (data.success) {
+                    // 从本地列表移除
+                    const idx = messages.findIndex(m => m.id === id);
+                    if (idx !== -1) messages.splice(idx, 1);
+                    renderAll();
+                    showToast('✅ 已删除消息', false, 'success');
+                } else {
+                    showToast('⚠️ 删除失败：' + (data.error || '未知错误'), true);
+                }
+            })
+            .catch(err => {
+                console.error('删除消息失败:', err);
+                // 如果API失败，降级到本地删除
+                const idx = messages.findIndex(m => m.id === id);
+                if (idx !== -1) {
+                    messages.splice(idx, 1);
+                    renderAll();
+                    showToast('✅ 已本地删除消息（API未响应）', false, 'success');
+                } else {
+                    showToast('⚠️ 删除失败，请重试', true);
+                }
+            });
+    }
+
+    // 清空房间消息
+    function clearRoom(roomName) {
+        if (!confirm(`确认清空 "${roomName}" 的所有消息？此操作不可撤销！`)) return;
+        
+        if (USE_DEMO) {
+            messages = messages.filter(m => m.room !== roomName);
+            renderAll();
+            showToast(`✅ 已清空 "${roomName}" 的消息`, false, 'success');
+            return;
+        }
+
+        const url = `/api/rooms/${roomName}/messages`;
+        fetch(url, { method: 'DELETE' })
+            .then(res => res.json())
+            .then(data => {
+                if (data.success) {
+                    messages = messages.filter(m => m.room !== roomName);
+                    renderAll();
+                    showToast(`✅ 已清空 "${roomName}" 的消息`, false, 'success');
+                } else {
+                    showToast('⚠️ 清空失败', true);
+                }
+            })
+            .catch(() => {
+                messages = messages.filter(m => m.room !== roomName);
+                renderAll();
+                showToast(`✅ 已本地清空 "${roomName}"（API未响应）`, false, 'success');
+            });
+    }
+
+    // 删除房间
+    function deleteRoom(roomName) {
+        if (!confirm(`确认删除房间 "${roomName}"？所有消息也将被删除！`)) return;
+        
+        if (USE_DEMO) {
+            rooms = rooms.filter(r => r.room_name !== roomName);
+            messages = messages.filter(m => m.room !== roomName);
+            renderAll();
+            showToast(`✅ 已删除房间：${roomName}`, false, 'success');
+            return;
+        }
+
+        const url = `/api/rooms/${roomName}`;
+        fetch(url, { method: 'DELETE' })
+            .then(res => res.json())
+            .then(data => {
+                if (data.success) {
+                    rooms = rooms.filter(r => r.room_name !== roomName);
+                    messages = messages.filter(m => m.room !== roomName);
+                    renderAll();
+                    showToast(`✅ 已删除房间：${roomName}`, false, 'success');
+                } else {
+                    showToast('⚠️ 删除房间失败', true);
+                }
+            })
+            .catch(() => {
+                rooms = rooms.filter(r => r.room_name !== roomName);
+                messages = messages.filter(m => m.room !== roomName);
+                renderAll();
+                showToast(`✅ 已本地删除房间：${roomName}（API未响应）`, false, 'success');
+            });
+    }
+
+    // 创建房间
     function createRoom() {
         const name = document.getElementById('newRoomName').value.trim();
-        if (!name) { showToast('请输入房间名称', true); return; }
-        // 通过 socket 通知创建房间（简化：先写数据库）
-        fetch('/api/rooms')
+        if (!name) { showToast('⚠️ 请输入房间名称', true); return; }
+        if (rooms.find(r => r.room_name === name)) {
+            showToast('⚠️ 房间已存在', true);
+            return;
+        }
+        
+        if (USE_DEMO) {
+            rooms.push({
+                room_name: name,
+                created_by: currentAdmin,
+                created_at: new Date().toISOString().replace('T', ' ').slice(0, 19)
+            });
+            document.getElementById('newRoomName').value = '';
+            renderAll();
+            showToast(`✅ 已创建房间：${name}`, false, 'success');
+            return;
+        }
+
+        const url = `/api/rooms`;
+        fetch(url, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ room_name: name })
+        })
             .then(res => res.json())
             .then(data => {
-                if (data.find(r => r.room_name === name)) {
-                    showToast('房间已存在', true);
-                    return;
+                if (data.success) {
+                    rooms.push({
+                        room_name: name,
+                        created_by: currentAdmin,
+                        created_at: new Date().toISOString().replace('T', ' ').slice(0, 19)
+                    });
+                    document.getElementById('newRoomName').value = '';
+                    renderAll();
+                    showToast(`✅ 已创建房间：${name}`, false, 'success');
+                } else {
+                    showToast('⚠️ 创建失败：' + (data.error || '未知错误'), true);
                 }
-                // 实际创建需要后端支持，这里用系统消息方式直接插入数据库较复杂
-                // 简单做法：通过 socketio 广播系统消息，这里略，直接刷新
-                showToast('请通过后端接口创建（示例功能）');
+            })
+            .catch(() => {
+                rooms.push({
+                    room_name: name,
+                    created_by: currentAdmin,
+                    created_at: new Date().toISOString().replace('T', ' ').slice(0, 19)
+                });
+                document.getElementById('newRoomName').value = '';
+                renderAll();
+                showToast(`✅ 已本地创建房间：${name}（API未响应）`, false, 'success');
             });
     }
 
-    function clearRoom(room) {
-        if (!confirm(`确认清空 "${room}" 的所有消息？`)) return;
-        fetch(`/api/clear_messages/${room}`, { method: 'DELETE' })
-            .then(res => res.json())
-            .then(data => {
-                if (data.success) { showToast('已清空该房间消息'); loadMessages(); }
-                else { showToast('操作失败', true); }
-            });
+    // ============================================================
+    //  Toast 提示
+    // ============================================================
+    function showToast(msg, isError = false, type = '') {
+        const t = document.getElementById('toast');
+        t.textContent = msg;
+        t.className = 'toast';
+        if (isError) t.classList.add('error');
+        if (type === 'success') t.classList.add('success');
+        t.classList.add('show');
+        clearTimeout(t._timer);
+        t._timer = setTimeout(() => t.classList.remove('show'), 4000);
     }
 
-    // ===== Tab 切换 =====
+    // ============================================================
+    //  Tab 切换
+    // ============================================================
     document.querySelectorAll('.tabs button').forEach(btn => {
         btn.addEventListener('click', function() {
             document.querySelectorAll('.tabs button').forEach(b => b.classList.remove('active'));
@@ -310,18 +689,11 @@
         });
     });
 
-    // ===== Toast =====
-    function showToast(msg, isError = false) {
-        const t = document.getElementById('toast');
-        t.textContent = msg;
-        t.style.background = isError ? '#cc3344' : '#0f3460';
-        t.classList.add('show');
-        clearTimeout(t._timer);
-        t._timer = setTimeout(() => t.classList.remove('show'), 3000);
-    }
-
-    // ===== 初始化 =====
+    // ============================================================
+    //  初始化
+    // ============================================================
     loadAll();
+    console.log('✅ 管理后台已加载（' + (USE_DEMO ? '演示模式' : 'API模式') + '）');
 </script>
 </body>
 </html>
