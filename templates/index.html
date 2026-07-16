@@ -4,6 +4,17 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>💬 聊天室</title>
+    
+    <!-- KaTeX CSS -->
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/katex@0.16.9/dist/katex.min.css">
+    
+    <!-- Markdown 解析库 -->
+    <script src="https://cdn.jsdelivr.net/npm/marked@11.1.1/marked.min.js"></script>
+    <!-- KaTeX 渲染库 -->
+    <script src="https://cdn.jsdelivr.net/npm/katex@0.16.9/dist/katex.min.js"></script>
+    <!-- 自动渲染 KaTeX -->
+    <script src="https://cdn.jsdelivr.net/npm/katex@0.16.9/dist/contrib/auto-render.min.js"></script>
+    
     <script src="https://cdn.socket.io/4.5.0/socket.io.min.js"></script>
     <style>
         * {
@@ -117,7 +128,7 @@
             border-radius: 10px;
         }
         .message {
-            max-width: 70%;
+            max-width: 80%;
             padding: 10px 16px;
             border-radius: 15px;
             word-wrap: break-word;
@@ -170,7 +181,72 @@
         }
         .message .msg-content {
             font-size: 15px;
-            line-height: 1.5;
+            line-height: 1.6;
+        }
+        /* Markdown 样式 */
+        .message .msg-content p {
+            margin: 4px 0;
+        }
+        .message .msg-content code {
+            background: rgba(0,0,0,0.3);
+            padding: 2px 6px;
+            border-radius: 4px;
+            font-size: 13px;
+            font-family: 'Courier New', monospace;
+        }
+        .message .msg-content pre {
+            background: rgba(0,0,0,0.4);
+            padding: 10px;
+            border-radius: 8px;
+            overflow-x: auto;
+            margin: 6px 0;
+        }
+        .message .msg-content pre code {
+            background: none;
+            padding: 0;
+        }
+        .message .msg-content blockquote {
+            border-left: 3px solid #e94560;
+            padding-left: 12px;
+            margin: 6px 0;
+            color: #aaa;
+        }
+        .message .msg-content a {
+            color: #5bade3;
+            text-decoration: none;
+        }
+        .message .msg-content a:hover {
+            text-decoration: underline;
+        }
+        .message .msg-content ul, 
+        .message .msg-content ol {
+            padding-left: 20px;
+            margin: 4px 0;
+        }
+        .message .msg-content table {
+            border-collapse: collapse;
+            margin: 6px 0;
+            font-size: 13px;
+        }
+        .message .msg-content th,
+        .message .msg-content td {
+            border: 1px solid rgba(255,255,255,0.2);
+            padding: 4px 10px;
+        }
+        .message .msg-content th {
+            background: rgba(0,0,0,0.3);
+        }
+        .message .msg-content img {
+            max-width: 100%;
+            border-radius: 8px;
+        }
+        /* KaTeX 样式 */
+        .message .msg-content .katex-display {
+            margin: 8px 0;
+            overflow-x: auto;
+        }
+        .message .msg-content .katex {
+            font-size: 1.1em;
         }
         .message .delete-btn {
             background: none;
@@ -249,6 +325,23 @@
             min-height: 25px;
             font-style: italic;
         }
+        .format-hint {
+            color: #6a7a9a;
+            font-size: 12px;
+            padding: 4px 25px 10px 25px;
+            background: #16213e;
+            border-top: 1px solid #0f3460;
+        }
+        .format-hint span {
+            margin-right: 12px;
+        }
+        .format-hint code {
+            background: #0f3460;
+            padding: 1px 6px;
+            border-radius: 4px;
+            font-size: 12px;
+            color: #e94560;
+        }
         @media (max-width: 600px) {
             .chat-container {
                 height: 100vh;
@@ -278,6 +371,16 @@
             }
             .header-right {
                 gap: 8px;
+            }
+            .format-hint {
+                font-size: 11px;
+                padding: 4px 15px 8px 15px;
+            }
+            .format-hint span {
+                margin-right: 8px;
+            }
+            .message {
+                max-width: 90%;
             }
         }
     </style>
@@ -311,8 +414,19 @@
 
         <!-- 输入区域 -->
         <div class="input-area">
-            <input type="text" id="messageInput" placeholder="输入消息..." autofocus>
+            <input type="text" id="messageInput" placeholder="输入消息... 支持 Markdown 和 LaTeX" autofocus>
             <button id="sendBtn" onclick="sendMessage()">发送</button>
+        </div>
+        
+        <!-- 格式提示 -->
+        <div class="format-hint">
+            <span>📝 <code>**粗体**</code></span>
+            <span><code>*斜体*</code></span>
+            <span><code>`代码`</code></span>
+            <span><code>$$公式$$</code></span>
+            <span><code># 标题</code></span>
+            <span><code>- 列表</code></span>
+            <span>🔒 HTML 已禁用</span>
         </div>
     </div>
 
@@ -321,6 +435,75 @@
         const isAdmin = {{ is_admin|tojson }};
         const room = 'public';
         let socket = null;
+
+        // ========== 配置 marked（禁用 HTML）==========
+        const renderer = new marked.Renderer();
+        // 禁用 HTML 标签
+        renderer.html = function(html) {
+            return ''; // 完全忽略 HTML
+        };
+        
+        marked.setOptions({
+            renderer: renderer,
+            breaks: true,
+            gfm: true,
+            headerIds: false,
+            mangle: false
+        });
+
+        // ========== 渲染 Markdown + KaTeX ==========
+        function renderContent(text) {
+            if (!text) return '';
+            
+            // 先转义 HTML 特殊字符（防止注入）
+            let safe = escapeHtml(text);
+            
+            // 提取并保护 KaTeX 公式（防止被 Markdown 处理）
+            const formulas = [];
+            // 块级公式 $$...$$
+            safe = safe.replace(/\$\$([\s\S]*?)\$\$/g, (match, formula) => {
+                const idx = formulas.length;
+                formulas.push({ type: 'block', content: formula });
+                return `%%KATEX_BLOCK_${idx}%%`;
+            });
+            // 行内公式 $...$
+            safe = safe.replace(/\$([^\$\n]+?)\$/g, (match, formula) => {
+                const idx = formulas.length;
+                formulas.push({ type: 'inline', content: formula });
+                return `%%KATEX_INLINE_${idx}%%`;
+            });
+            
+            // 使用 marked 渲染 Markdown
+            let html = marked.parse(safe);
+            
+            // 恢复 KaTeX 公式并渲染
+            formulas.forEach((f, idx) => {
+                const placeholder = f.type === 'block' 
+                    ? `%%KATEX_BLOCK_${idx}%%`
+                    : `%%KATEX_INLINE_${idx}%%`;
+                try {
+                    let rendered;
+                    if (f.type === 'block') {
+                        rendered = katex.renderToString(f.content, {
+                            displayMode: true,
+                            throwOnError: false,
+                            trust: false
+                        });
+                    } else {
+                        rendered = katex.renderToString(f.content, {
+                            displayMode: false,
+                            throwOnError: false,
+                            trust: false
+                        });
+                    }
+                    html = html.replace(placeholder, rendered);
+                } catch (e) {
+                    html = html.replace(placeholder, `<code>错误公式: ${escapeHtml(f.content)}</code>`);
+                }
+            });
+            
+            return html;
+        }
 
         // ========== 初始化 Socket ==========
         function initSocket() {
@@ -331,7 +514,6 @@
             socket.on('connect', () => {
                 console.log('✅ 已连接到服务器');
                 socket.emit('join', { room: room });
-                // 请求当前在线人数
                 fetch('/api/online_count', { credentials: 'include' })
                     .then(r => r.json())
                     .then(data => {
@@ -380,9 +562,11 @@
             
             const time = new Date(data.timestamp).toLocaleTimeString('zh-CN', { hour: '2-digit', minute: '2-digit' });
             
-            // 显示删除按钮：自己的消息 或 管理员
             const deleteBtn = (isOwn || isAdmin) ? 
                 `<button class="delete-btn" onclick="deleteMessage(${data.id})">✕</button>` : '';
+            
+            // 渲染内容
+            const renderedHtml = renderContent(data.content);
             
             div.innerHTML = `
                 <div class="msg-header">
@@ -390,7 +574,7 @@
                     <span class="msg-time">${time}</span>
                     ${deleteBtn}
                 </div>
-                <div class="msg-content">${escapeHtml(data.content)}</div>
+                <div class="msg-content">${renderedHtml}</div>
             `;
             
             container.appendChild(div);
