@@ -13,21 +13,28 @@ import uuid
 
 app = Flask(__name__)
 app.secret_key = os.getenv("SECRET_KEY", "your-secret-key-change-this-in-production")
+# Cookie 兼容配置
 app.config['SESSION_COOKIE_SECURE'] = True
 app.config['SESSION_COOKIE_HTTPONLY'] = True
+app.config['SESSION_COOKIE_SAMESITE'] = 'Lax'
 CORS(app)
 
 socketio = SocketIO(app, cors_allowed_origins="*", async_mode="threading", logger=False, engineio_logger=False)
 
 DB_PATH = 'chatroom.db'
-
 user_send_time = {}
 RATE_LIMIT_SECONDS = 1.5
+
+# 全局异常捕获，防止500直接报错
+@app.errorhandler(Exception)
+def handle_exception(e):
+    print("Global Error:", str(e))
+    return jsonify({"error": "Server error, please try again later"}), 500
 
 def init_db():
     if os.path.exists(DB_PATH):
         return
-    conn = sqlite3.connect(DB_PATH)
+    conn = sqlite3.connect(DB_PATH, timeout=10)
     c = conn.cursor()
     
     c.execute('''
@@ -83,7 +90,7 @@ def init_db():
 init_db()
 
 def get_db():
-    conn = sqlite3.connect(DB_PATH, timeout=10)
+    conn = sqlite3.connect(DB_PATH, timeout=15)
     conn.row_factory = sqlite3.Row
     return conn
 
@@ -100,12 +107,13 @@ def get_real_ip():
 def is_ip_or_device_banned():
     device_id = request.cookies.get("device_id","")
     ip = get_real_ip()
-    conn = get_db()
-    row = conn.execute('''
-        SELECT id FROM ban_list WHERE ip = ? OR device_id = ?
-    ''', (ip, device_id)).fetchone()
-    conn.close()
-    return row is not None
+    try:
+        conn = get_db()
+        row = conn.execute('SELECT id FROM ban_list WHERE ip = ? OR device_id = ?', (ip, device_id)).fetchone()
+        conn.close()
+        return row is not None
+    except:
+        return False
 
 def login_required(f):
     @wraps(f)
@@ -128,7 +136,6 @@ def owner_required(f):
 @app.route('/')
 def index():
     device_id = request.cookies.get("device_id")
-    resp = None
     if is_ip_or_device_banned():
         return "你的设备或IP已被管理员封禁",403
 
@@ -136,7 +143,7 @@ def index():
         resp = make_response(redirect(url_for('login_page')))
         if not device_id:
             device_id = str(uuid.uuid4())
-            resp.set_cookie("device_id", device_id, max_age=365*24*3600, httponly=True)
+            resp.set_cookie("device_id", device_id, max_age=365*24*3600, httponly=True, samesite='Lax')
         return resp
     
     conn = get_db()
@@ -149,7 +156,7 @@ def index():
     resp = make_response(render_template('index.html', username=user['username'], is_admin=user['username'] == 'yingMC', rooms=[r['room_name'] for r in rooms]))
     if not device_id:
         new_id = str(uuid.uuid4())
-        resp.set_cookie("device_id", new_id, max_age=365*24*3600, httponly=True)
+        resp.set_cookie("device_id", new_id, max_age=365*24*3600, httponly=True, samesite='Lax')
     return resp
 
 @app.route('/login')
@@ -158,7 +165,7 @@ def login_page():
     device_id = request.cookies.get("device_id")
     if not device_id:
         new_id = str(uuid.uuid4())
-        resp.set_cookie("device_id", new_id, max_age=365*24*3600, httponly=True)
+        resp.set_cookie("device_id", new_id, max_age=365*24*3600, httponly=True, samesite='Lax')
     return resp
 
 @app.route('/api/login', methods=['POST'])
@@ -383,6 +390,7 @@ def handle_message(data):
             'timestamp': datetime.now().strftime('%Y-%m-%d %H:%M:%S')
         }, room=room)
     except Exception as e:
+        print("message error:", e)
         emit('system_message', {'content': '消息发送失败'}, room=sid)
 
 @socketio.on('admin_message')
