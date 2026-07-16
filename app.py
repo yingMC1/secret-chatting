@@ -26,7 +26,6 @@ DB_PATH = 'chatroom.db'
 
 # ========== 在线用户统计 ==========
 online_users = {}  # {session_id: username}
-online_count = 0
 
 # ========== 数据库初始化 ==========
 def init_db():
@@ -127,6 +126,7 @@ def admin_required(f):
 # ========== 强制 HTTPS（Railway 适配）==========
 @app.before_request
 def before_request():
+    # 确保使用 HTTPS
     if request.headers.get('X-Forwarded-Proto') == 'http':
         return redirect(request.url.replace('http://', 'https://'), 301)
 
@@ -141,18 +141,30 @@ def index():
     user = conn.execute('SELECT username, is_admin, is_banned FROM users WHERE id = ?', (session['user_id'],)).fetchone()
     conn.close()
     
-    if user and user['is_banned']:
+    if not user:
+        # 用户不存在，清除 session
+        session.clear()
+        return redirect(url_for('login_page'))
+    
+    if user['is_banned']:
         session.clear()
         return '您已被封禁', 403
     
-    # 不再传递 rooms 列表，直接进入聊天室
+    # 直接进入聊天室，不传递房间列表
     return render_template('index.html', username=user['username'], is_admin=user['is_admin'])
 
 @app.route('/login')
 def login_page():
     # 如果已登录，直接跳转到聊天室
     if 'user_id' in session:
-        return redirect(url_for('index'))
+        # 验证用户是否仍然有效
+        conn = get_db()
+        user = conn.execute('SELECT id FROM users WHERE id = ?', (session['user_id'],)).fetchone()
+        conn.close()
+        if user:
+            return redirect(url_for('index'))
+        else:
+            session.clear()
     return render_template('login.html')
 
 @app.route('/api/login', methods=['POST'])
@@ -169,9 +181,13 @@ def login():
     if user:
         if user['is_banned']:
             return jsonify({'error': '该账号已被封禁'}), 403
+        
+        # 设置 session
         session['user_id'] = user['id']
         session['username'] = user['username']
         session['is_admin'] = user['is_admin']
+        session.permanent = True  # 使 session 持久化
+        
         return jsonify({'success': True, 'is_admin': user['is_admin']})
     return jsonify({'error': '用户名或密码错误'}), 401
 
@@ -224,7 +240,7 @@ def get_messages(room):
 @admin_required
 def get_users():
     conn = get_db()
-    users = conn.execute('SELECT id, username, is_admin, is_banned, created_at FROM users').fetchall()
+    users = conn.execute('SELECT id, username, is_admin, is_banned, created_at FROM users ORDER BY id').fetchall()
     conn.close()
     return jsonify([dict(u) for u in users])
 
@@ -407,9 +423,7 @@ def update_online_count():
 @socketio.on('connect')
 def handle_connect():
     username = session.get('username', '匿名')
-    # 存储 sid 到 session
     session['_sid'] = request.sid
-    # 添加到在线列表
     online_users[request.sid] = username
     update_online_count()
     print(f'✅ {username} 已连接，当前在线: {len(online_users)}')
@@ -423,14 +437,12 @@ def handle_disconnect():
 @socketio.on('join')
 def handle_join(data):
     room = data.get('room', 'public')
-    # 只允许 public 房间
     if room != 'public':
         room = 'public'
     username = session.get('username', '匿名')
     join_room(room)
     emit('system_message', {'content': f'{username} 加入了房间'}, room=room)
     emit('room_joined', {'room': room})
-    # 发送当前在线人数
     emit('online_count', {'count': len(online_users)}, room=request.sid)
 
 @socketio.on('leave')
@@ -443,7 +455,6 @@ def handle_leave(data):
 @socketio.on('message')
 def handle_message(data):
     room = data.get('room', 'public')
-    # 只允许 public 房间
     if room != 'public':
         room = 'public'
     username = session.get('username', '匿名')
