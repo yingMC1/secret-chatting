@@ -355,7 +355,7 @@ def delete_user(user_id):
     return jsonify({'success': True, 'username': user['username']})
 
 
-# ===== 关键修复：禁止删除 yingMC 的消息 =====
+# ===== 修复：yingMC 能删自己的消息，其他管理员不能删 yingMC 的消息 =====
 @app.route('/api/delete_message/<int:msg_id>', methods=['DELETE'])
 @login_required
 def delete_message(msg_id):
@@ -365,14 +365,17 @@ def delete_message(msg_id):
         conn.close()
         return jsonify({'error': '消息不存在'}), 404
 
-    # ===== 禁止删除 yingMC 的消息 =====
-    if msg['username'] == 'yingMC':
-        conn.close()
-        return jsonify({'error': '❌ 不能删除所有者 yingMC 的消息'}), 400
-
     user = conn.execute('SELECT username, is_admin FROM users WHERE id = ?', (session['user_id'],)).fetchone()
     conn.close()
 
+    # ===== 如果是 yingMC 的消息 =====
+    if msg['username'] == 'yingMC':
+        # 只有 yingMC 本人可以删除自己的消息
+        if user['username'] != 'yingMC':
+            return jsonify({'error': '❌ 不能删除所有者 yingMC 的消息'}), 400
+        # yingMC 本人可以删除，继续执行
+
+    # 权限检查：管理员 或 消息作者本人
     if user['is_admin'] or user['username'] == msg['username']:
         conn = get_db()
         conn.execute('DELETE FROM messages WHERE id = ?', (msg_id,))
