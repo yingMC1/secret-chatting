@@ -430,4 +430,184 @@
         const admins = users.filter(u => u.is_admin).length;
         const banned = users.filter(u => u.is_banned).length;
         document.getElementById('totalUsers').textContent = total;
-        document
+        document.getElementById('totalAdmins').textContent = admins;
+        document.getElementById('totalBanned').textContent = banned;
+        document.getElementById('totalMessages').textContent = messages.length;
+        document.getElementById('adminName').textContent = `👤 管理员：${currentAdmin || '未知'}`;
+        document.getElementById('msgCount').textContent = `共 ${messages.length} 条消息`;
+    }
+
+    function renderUsers() {
+        const search = document.getElementById('userSearch').value.toLowerCase();
+        const filtered = users.filter(u => u.username && u.username.toLowerCase().includes(search));
+        const tbody = document.getElementById('userTableBody');
+        if (filtered.length === 0) {
+            tbody.innerHTML = '<tr><td colspan="6" class="empty">暂无用户</td></tr>';
+            return;
+        }
+        tbody.innerHTML = filtered.map(u => `
+            <tr>
+                <td>${u.id || '-'}</td>
+                <td><strong>${u.username || '未知'}</strong></td>
+                <td>${u.is_admin ? '<span class="badge badge-admin">管理员</span>' : '普通用户'}</td>
+                <td>${u.is_banned ? '<span class="badge badge-banned">已封禁</span>' : '<span class="badge badge-normal">正常</span>'}</td>
+                <td>${u.created_at || '-'}</td>
+                <td>
+                    ${u.is_admin ? '<span style="color:#888;">不可操作</span>' : 
+                      (u.is_banned ? 
+                        `<button class="btn btn-success" onclick="unbanUser(${u.id}, '${u.username}')">解封</button>` :
+                        `<button class="btn btn-danger" onclick="banUser(${u.id}, '${u.username}')">封禁</button>`
+                      )}
+                </td>
+            </tr>
+        `).join('');
+    }
+
+    function filterUsers() { renderUsers(); }
+
+    function renderMessages() {
+        const search = document.getElementById('msgSearch').value.toLowerCase();
+        const filtered = messages.filter(m => {
+            return m.content && m.content.toLowerCase().includes(search);
+        });
+        const tbody = document.getElementById('msgTableBody');
+        if (filtered.length === 0) {
+            tbody.innerHTML = '<tr><td colspan="5" class="empty">暂无消息</td></tr>';
+            return;
+        }
+        const display = [...filtered].reverse().slice(0, 200);
+        tbody.innerHTML = display.map(m => {
+            const rendered = renderMarkdown(m.content || '');
+            return `
+            <tr>
+                <td>${m.id || '-'}</td>
+                <td><strong>${m.username || '匿名'}</strong></td>
+                <td><div class="msg-content">${rendered}</div></td>
+                <td>${m.timestamp || '-'}</td>
+                <td>
+                    <button class="btn btn-danger" onclick="deleteMessage(${m.id})">删除</button>
+                </td>
+            </tr>
+        `}).join('');
+    }
+
+    function filterMessages() { renderMessages(); }
+
+    function renderAll() {
+        renderStats();
+        renderUsers();
+        renderMessages();
+    }
+
+    // ============================================================
+    //  操作函数
+    // ============================================================
+
+    async function banUser(id, username) {
+        if (!confirm(`确认封禁用户 "${username}"？`)) return;
+        try {
+            const res = await fetch(`${API_BASE}/ban/${id}`, { method: 'POST' });
+            const data = await res.json();
+            if (data.success) {
+                showToast('✅ 已封禁用户：' + username, false, 'success');
+                setTimeout(loadAll, 500);
+            } else {
+                showToast('⚠️ 封禁失败: ' + (data.error || '未知错误'), true);
+            }
+        } catch (e) {
+            showToast('⚠️ 请求失败', true);
+        }
+    }
+
+    async function unbanUser(id, username) {
+        try {
+            const res = await fetch(`${API_BASE}/unban/${id}`, { method: 'POST' });
+            const data = await res.json();
+            if (data.success) {
+                showToast('✅ 已解封用户：' + username, false, 'success');
+                setTimeout(loadAll, 500);
+            } else {
+                showToast('⚠️ 解封失败: ' + (data.error || '未知错误'), true);
+            }
+        } catch (e) {
+            showToast('⚠️ 请求失败', true);
+        }
+    }
+
+    async function deleteMessage(id) {
+        if (!confirm('确认删除该消息？此操作不可撤销！')) return;
+        try {
+            const res = await fetch(`${API_BASE}/delete_message/${id}`, { method: 'DELETE' });
+            const data = await res.json();
+            if (data.success) {
+                showToast('✅ 已删除消息 (ID: ' + id + ')', false, 'success');
+                setTimeout(loadAll, 500);
+            } else {
+                showToast('⚠️ 删除失败: ' + (data.error || '未知错误'), true);
+            }
+        } catch (e) {
+            showToast('⚠️ 请求失败: ' + e.message, true);
+        }
+    }
+
+    // ============================================================
+    //  Toast
+    // ============================================================
+    function showToast(msg, isError = false, type = '') {
+        const t = document.getElementById('toast');
+        t.textContent = msg;
+        t.className = 'toast';
+        if (isError) t.classList.add('error');
+        if (type === 'success') t.classList.add('success');
+        t.classList.add('show');
+        clearTimeout(t._timer);
+        t._timer = setTimeout(() => t.classList.remove('show'), 5000);
+    }
+
+    // ============================================================
+    //  Tab切换
+    // ============================================================
+    document.querySelectorAll('.tabs button').forEach(btn => {
+        btn.addEventListener('click', function() {
+            document.querySelectorAll('.tabs button').forEach(b => b.classList.remove('active'));
+            this.classList.add('active');
+            document.querySelectorAll('.tab-content').forEach(tc => tc.classList.remove('active'));
+            document.getElementById('tab-' + this.dataset.tab).classList.add('active');
+        });
+    });
+
+    // ============================================================
+    //  自动刷新
+    // ============================================================
+    let autoRefreshTimer = null;
+
+    function startAutoRefresh() {
+        if (autoRefreshTimer) clearInterval(autoRefreshTimer);
+        autoRefreshTimer = setInterval(() => {
+            refreshSilent();
+        }, 8000);
+    }
+
+    async function refreshSilent() {
+        try {
+            const [usersRes, msgRes] = await Promise.all([
+                fetch(`${API_BASE}/users`),
+                fetch(`${API_BASE}/messages/public`)
+            ]);
+            if (usersRes.ok) users = await usersRes.json();
+            if (msgRes.ok) messages = await msgRes.json();
+            renderAll();
+        } catch(e) {}
+    }
+
+    // ============================================================
+    //  初始化
+    // ============================================================
+    loadAll();
+    startAutoRefresh();
+    console.log('✅ 管理后台已加载');
+    console.log('📌 支持 Markdown 和 KaTeX 渲染');
+    console.log('📌 封禁/解封/删除消息会全局播报');
+</script>
+</body>
+</html>
