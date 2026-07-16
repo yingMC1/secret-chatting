@@ -167,6 +167,17 @@ def get_rooms():
     conn.close()
     return jsonify([dict(r) for r in rooms])
 
+# ========== 新增：获取当前用户信息 ==========
+@app.route('/api/me')
+@login_required
+def get_me():
+    conn = get_db()
+    user = conn.execute('SELECT id, username, is_admin FROM users WHERE id = ?', (session['user_id'],)).fetchone()
+    conn.close()
+    if user:
+        return jsonify({'id': user['id'], 'username': user['username'], 'is_admin': bool(user['is_admin'])})
+    return jsonify({'error': '用户不存在'}), 404
+
 @app.route('/api/ban/<int:user_id>', methods=['POST'])
 @admin_required
 def ban_user(user_id):
@@ -190,6 +201,64 @@ def unban_user(user_id):
     conn.close()
     return jsonify({'success': True})
 
+# ========== 新增：授予管理员权限 ==========
+@app.route('/api/make_admin/<int:user_id>', methods=['POST'])
+@admin_required
+def make_admin(user_id):
+    conn = get_db()
+    user = conn.execute('SELECT is_admin, username FROM users WHERE id = ?', (user_id,)).fetchone()
+    if not user:
+        conn.close()
+        return jsonify({'error': '用户不存在'}), 404
+    if user['is_admin']:
+        conn.close()
+        return jsonify({'error': '该用户已是管理员'}), 400
+    conn.execute('UPDATE users SET is_admin = 1 WHERE id = ?', (user_id,))
+    conn.commit()
+    conn.close()
+    return jsonify({'success': True, 'username': user['username']})
+
+# ========== 新增：撤销管理员权限 ==========
+@app.route('/api/revoke_admin/<int:user_id>', methods=['POST'])
+@admin_required
+def revoke_admin(user_id):
+    conn = get_db()
+    user = conn.execute('SELECT is_admin, username FROM users WHERE id = ?', (user_id,)).fetchone()
+    if not user:
+        conn.close()
+        return jsonify({'error': '用户不存在'}), 404
+    if not user['is_admin']:
+        conn.close()
+        return jsonify({'error': '该用户不是管理员'}), 400
+    if user_id == session['user_id']:
+        conn.close()
+        return jsonify({'error': '不能撤销自己的管理员权限'}), 400
+    conn.execute('UPDATE users SET is_admin = 0 WHERE id = ?', (user_id,))
+    conn.commit()
+    conn.close()
+    return jsonify({'success': True, 'username': user['username']})
+
+# ========== 新增：删除用户（管理员专用）==========
+@app.route('/api/delete_user/<int:user_id>', methods=['DELETE'])
+@admin_required
+def delete_user(user_id):
+    conn = get_db()
+    user = conn.execute('SELECT is_admin, username FROM users WHERE id = ?', (user_id,)).fetchone()
+    if not user:
+        conn.close()
+        return jsonify({'error': '用户不存在'}), 404
+    if user['is_admin']:
+        conn.close()
+        return jsonify({'error': '不能删除管理员'}), 400
+    # 删除用户的所有消息
+    conn.execute('DELETE FROM messages WHERE username = ?', (user['username'],))
+    # 删除用户
+    conn.execute('DELETE FROM users WHERE id = ?', (user_id,))
+    conn.commit()
+    conn.close()
+    socketio.emit('force_logout', room=str(user_id))
+    return jsonify({'success': True, 'username': user['username']})
+
 @app.route('/api/delete_message/<int:msg_id>', methods=['DELETE'])
 @login_required
 def delete_message(msg_id):
@@ -202,6 +271,7 @@ def delete_message(msg_id):
     user = conn.execute('SELECT username, is_admin FROM users WHERE id = ?', (session['user_id'],)).fetchone()
     conn.close()
     
+    # 管理员可以删除任何消息，普通用户只能删除自己的消息
     if user['is_admin'] or user['username'] == msg['username']:
         conn = get_db()
         conn.execute('DELETE FROM messages WHERE id = ?', (msg_id,))
