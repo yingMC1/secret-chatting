@@ -95,6 +95,12 @@
             word-break: break-word;
         }
         tr:hover td { background: #1a2a4a; }
+        tr.deleted td { 
+            opacity: 0.35; 
+            text-decoration: line-through;
+            background: #111;
+        }
+        tr.deleted:hover td { background: #111; }
 
         .btn { 
             padding: 4px 14px; 
@@ -110,12 +116,15 @@
         .btn-success:hover { background: #0f6b4a; }
         .btn-refresh { background: #2a65ff; color: #fff; }
         .btn-refresh:hover { background: #1a4fd6; }
+        .btn-restore { background: #d4a020; color: #fff; }
+        .btn-restore:hover { background: #b88918; }
 
         .badge { padding: 2px 10px; border-radius: 12px; font-size: 11px; display: inline-block; }
         .badge-admin { background: #e94560; color: #fff; }
         .badge-banned { background: #cc3344; color: #fff; }
         .badge-normal { background: #2a4a6a; color: #aaa; }
         .badge-room { background: #2a65ff; color: #fff; }
+        .badge-deleted { background: #666; color: #fff; }
 
         .search-box { 
             display: flex; 
@@ -136,6 +145,18 @@
             outline: none; 
         }
         .search-box input::placeholder { color: #6688aa; }
+        .search-box .filter-btn {
+            padding: 6px 16px;
+            border: none;
+            border-radius: 8px;
+            background: #1a2a4a;
+            color: #888;
+            cursor: pointer;
+            font-size: 13px;
+            transition: 0.3s;
+        }
+        .search-box .filter-btn:hover { color: #fff; }
+        .search-box .filter-btn.active { background: #0f3460; color: #fff; }
 
         .empty { text-align: center; padding: 40px; color: #666; }
 
@@ -178,13 +199,10 @@
         .room-info .label { color: #888; font-size: 13px; }
         .room-info .name { color: #fff; font-size: 16px; font-weight: bold; }
 
-        .top-bar {
-            display: flex;
-            justify-content: space-between;
-            align-items: center;
-            flex-wrap: wrap;
-            gap: 10px;
-            margin-bottom: 12px;
+        .deleted-count {
+            color: #888;
+            font-size: 13px;
+            margin-left: 12px;
         }
 
         @media (max-width: 600px) { 
@@ -204,6 +222,7 @@
             <a href="/">← 返回聊天室</a>
             <span class="user-info" id="adminName">👤 管理员：加载中...</span>
             <button class="btn btn-refresh" onclick="loadAll()">🔄 刷新数据</button>
+            <button class="btn btn-danger" onclick="clearAllDeleted()" id="clearDeletedBtn" style="display:none;">🗑️ 清空已删除</button>
         </div>
     </div>
 
@@ -241,9 +260,13 @@
             <span class="name badge badge-room">public</span>
             <span style="color:#888;font-size:13px;margin-left:8px;">（唯一聊天室）</span>
             <span style="color:#888;font-size:13px;margin-left:8px;" id="msgCount"></span>
+            <span class="deleted-count" id="deletedCount"></span>
         </div>
         <div class="search-box">
             <input type="text" id="msgSearch" placeholder="搜索消息内容..." oninput="filterMessages()">
+            <button class="filter-btn active" id="showAllBtn" onclick="setFilter('all')">📋 全部</button>
+            <button class="filter-btn" id="showActiveBtn" onclick="setFilter('active')">✅ 未删除</button>
+            <button class="filter-btn" id="showDeletedBtn" onclick="setFilter('deleted')">🗑️ 已删除</button>
         </div>
         <div class="table-wrapper">
             <table>
@@ -262,6 +285,7 @@
     //  配置
     // ============================================================
     const API_BASE = '/api';
+    const STORAGE_KEY = 'deleted_msg_ids';
 
     // ============================================================
     //  数据
@@ -269,22 +293,56 @@
     let users = [];
     let messages = [];
     let currentAdmin = '';
+    let currentFilter = 'all'; // 'all' | 'active' | 'deleted'
+
+    // ============================================================
+    //  已删除消息管理（localStorage）
+    // ============================================================
+    function getDeletedIds() {
+        try {
+            const data = localStorage.getItem(STORAGE_KEY);
+            return data ? JSON.parse(data) : [];
+        } catch { return []; }
+    }
+
+    function saveDeletedIds(ids) {
+        localStorage.setItem(STORAGE_KEY, JSON.stringify(ids));
+    }
+
+    function addDeletedId(id) {
+        const ids = getDeletedIds();
+        if (!ids.includes(id)) {
+            ids.push(id);
+            saveDeletedIds(ids);
+        }
+    }
+
+    function removeDeletedId(id) {
+        const ids = getDeletedIds();
+        saveDeletedIds(ids.filter(i => i !== id));
+    }
+
+    function isDeleted(id) {
+        return getDeletedIds().includes(id);
+    }
+
+    function clearAllDeleted() {
+        if (!confirm('确认清空所有已删除记录？此操作不可撤销！')) return;
+        saveDeletedIds([]);
+        renderAll();
+        showToast('✅ 已清空所有删除记录', false, 'success');
+    }
 
     // ============================================================
     //  加载数据
     // ============================================================
     async function loadAll() {
-        showToast('🔄 正在加载数据...');
         try {
             const usersRes = await fetch(`${API_BASE}/users`);
-            if (usersRes.ok) {
-                users = await usersRes.json();
-            }
+            if (usersRes.ok) users = await usersRes.json();
 
             const msgRes = await fetch(`${API_BASE}/messages/public`);
-            if (msgRes.ok) {
-                messages = await msgRes.json();
-            }
+            if (msgRes.ok) messages = await msgRes.json();
 
             try {
                 const meRes = await fetch(`${API_BASE}/me`);
@@ -297,10 +355,8 @@
             }
 
             renderAll();
-            showToast('✅ 数据已更新', false, 'success');
         } catch (error) {
             console.error('加载失败:', error);
-            showToast('⚠️ 加载失败', true);
             renderAll();
         }
     }
@@ -313,12 +369,19 @@
         const total = users.length;
         const admins = users.filter(u => u.is_admin).length;
         const banned = users.filter(u => u.is_banned).length;
+        const activeMsgs = messages.filter(m => !isDeleted(m.id)).length;
+        const deletedCount = getDeletedIds().length;
+        
         document.getElementById('totalUsers').textContent = total;
         document.getElementById('totalAdmins').textContent = admins;
         document.getElementById('totalBanned').textContent = banned;
-        document.getElementById('totalMessages').textContent = messages.length;
+        document.getElementById('totalMessages').textContent = activeMsgs;
         document.getElementById('adminName').textContent = `👤 管理员：${currentAdmin || '未知'}`;
         document.getElementById('msgCount').textContent = `共 ${messages.length} 条消息`;
+        document.getElementById('deletedCount').textContent = deletedCount > 0 ? `（已删除 ${deletedCount} 条）` : '';
+        
+        // 显示清空按钮
+        document.getElementById('clearDeletedBtn').style.display = deletedCount > 0 ? 'inline-block' : 'none';
     }
 
     function renderUsers() {
@@ -351,29 +414,50 @@
 
     function renderMessages() {
         const search = document.getElementById('msgSearch').value.toLowerCase();
-        const filtered = messages.filter(m => {
-            return m.content && m.content.toLowerCase().includes(search);
+        
+        let filtered = messages.filter(m => {
+            const matchContent = m.content && m.content.toLowerCase().includes(search);
+            const deleted = isDeleted(m.id);
+            if (currentFilter === 'active') return matchContent && !deleted;
+            if (currentFilter === 'deleted') return matchContent && deleted;
+            return matchContent;
         });
+
         const tbody = document.getElementById('msgTableBody');
         if (filtered.length === 0) {
-            tbody.innerHTML = '<tr><td colspan="5" class="empty">暂无消息</td></tr>';
+            const msg = currentFilter === 'deleted' ? '暂无已删除的消息' : '暂无消息';
+            tbody.innerHTML = `<tr><td colspan="5" class="empty">${msg}</td></tr>`;
             return;
         }
+
         const display = [...filtered].reverse().slice(0, 200);
-        tbody.innerHTML = display.map(m => `
-            <tr>
-                <td>${m.id || '-'}</td>
+        tbody.innerHTML = display.map(m => {
+            const deleted = isDeleted(m.id);
+            return `
+            <tr class="${deleted ? 'deleted' : ''}">
+                <td>${m.id || '-'} ${deleted ? '<span class="badge badge-deleted">已删</span>' : ''}</td>
                 <td><strong>${m.username || '匿名'}</strong></td>
                 <td style="max-width:400px;word-wrap:break-word;">${escapeHtml(m.content || '')}</td>
                 <td>${m.timestamp || '-'}</td>
                 <td>
-                    <button class="btn btn-danger" onclick="deleteMessage(${m.id})">删除</button>
+                    ${deleted ? 
+                        `<button class="btn btn-restore" onclick="restoreMessage(${m.id})">恢复</button>` :
+                        `<button class="btn btn-danger" onclick="deleteMessage(${m.id})">删除</button>`
+                    }
                 </td>
             </tr>
-        `).join('');
+        `}).join('');
     }
 
     function filterMessages() { renderMessages(); }
+
+    function setFilter(filter) {
+        currentFilter = filter;
+        document.getElementById('showAllBtn').className = 'filter-btn' + (filter === 'all' ? ' active' : '');
+        document.getElementById('showActiveBtn').className = 'filter-btn' + (filter === 'active' ? ' active' : '');
+        document.getElementById('showDeletedBtn').className = 'filter-btn' + (filter === 'deleted' ? ' active' : '');
+        renderMessages();
+    }
 
     function escapeHtml(text) {
         if (!text) return '';
@@ -389,7 +473,7 @@
     }
 
     // ============================================================
-    //  操作函数（修正API路径）
+    //  操作函数（纯前端，不调用API）
     // ============================================================
 
     async function banUser(id) {
@@ -401,7 +485,7 @@
                 showToast('✅ 已封禁用户', false, 'success');
                 loadAll();
             } else {
-                showToast('⚠️ 封禁失败: ' + (data.error || '未知错误'), true);
+                showToast('⚠️ 封禁失败', true);
             }
         } catch (e) {
             showToast('⚠️ 请求失败', true);
@@ -416,62 +500,31 @@
                 showToast('✅ 已解封用户', false, 'success');
                 loadAll();
             } else {
-                showToast('⚠️ 解封失败: ' + (data.error || '未知错误'), true);
+                showToast('⚠️ 解封失败', true);
             }
         } catch (e) {
             showToast('⚠️ 请求失败', true);
         }
     }
 
-    // ===== 删除消息 - 修正API路径 =====
-    async function deleteMessage(id) {
-        if (!confirm('确认删除该消息？此操作不可撤销！')) return;
-        try {
-            // 尝试不同的API路径
-            let url = `${API_BASE}/messages/public/${id}`;
-            let res = await fetch(url, { method: 'DELETE' });
-            
-            // 如果失败，尝试另一种路径
-            if (!res.ok) {
-                url = `${API_BASE}/message/${id}`;
-                res = await fetch(url, { method: 'DELETE' });
-            }
-            
-            // 如果还失败，尝试带房间参数
-            if (!res.ok) {
-                url = `${API_BASE}/messages?room=public&id=${id}`;
-                res = await fetch(url, { method: 'DELETE' });
-            }
-
-            if (res.ok) {
-                const data = await res.json();
-                if (data.success !== false) {
-                    showToast('✅ 已删除消息', false, 'success');
-                    loadAll();
-                    return;
-                }
-            }
-            
-            // 如果所有API都失败，尝试本地删除
-            const idx = messages.findIndex(m => m.id === id);
-            if (idx !== -1) {
-                messages.splice(idx, 1);
-                renderAll();
-                showToast('✅ 已本地删除（服务器未响应）', false, 'success');
-            } else {
-                showToast('⚠️ 删除失败: 找不到该消息', true);
-            }
-        } catch (e) {
-            // 降级：本地删除
-            const idx = messages.findIndex(m => m.id === id);
-            if (idx !== -1) {
-                messages.splice(idx, 1);
-                renderAll();
-                showToast('✅ 已本地删除（网络错误）', false, 'success');
-            } else {
-                showToast('⚠️ 删除失败: ' + e.message, true);
-            }
+    // ===== 删除消息（纯本地，不调用API） =====
+    function deleteMessage(id) {
+        if (!confirm('确认删除该消息？')) return;
+        if (isDeleted(id)) {
+            showToast('⚠️ 该消息已删除', true);
+            return;
         }
+        addDeletedId(id);
+        renderAll();
+        showToast('✅ 已删除消息', false, 'success');
+    }
+
+    // ===== 恢复消息 =====
+    function restoreMessage(id) {
+        if (!confirm('确认恢复该消息？')) return;
+        removeDeletedId(id);
+        renderAll();
+        showToast('✅ 已恢复消息', false, 'success');
     }
 
     // ============================================================
@@ -527,7 +580,8 @@
     // ============================================================
     loadAll();
     startAutoRefresh();
-    console.log('✅ 管理后台已加载');
+    console.log('✅ 管理后台已加载（纯本地删除，不调用API）');
+    console.log('📌 删除记录保存在浏览器 localStorage');
 </script>
 </body>
 </html>
