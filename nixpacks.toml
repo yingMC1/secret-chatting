@@ -3,3 +3,9 @@ install = "pip install -r requirements.txt"
 
 [start]
 cmd = "gunicorn --worker-class eventlet -w 1 app:app"
+
+[phases.setup]
+nixPkgs = ["python311"]
+
+[providers.python]
+pythonVersion = "3.11"
