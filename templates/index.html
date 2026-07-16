@@ -181,6 +181,7 @@
             color: rgba(255,255,255,0.5);
             font-size: 11px;
         }
+        /* ===== 关键修复：保留换行 ===== */
         .message .msg-content {
             font-size: 15px;
             line-height: 1.8;
@@ -245,7 +246,6 @@
             max-width: 100%;
             border-radius: 8px;
         }
-        /* @提及高亮 */
         .message .msg-content .mention {
             color: #f5a623;
             background: rgba(245, 166, 35, 0.2);
@@ -253,7 +253,6 @@
             border-radius: 4px;
             font-weight: bold;
         }
-        /* KaTeX 样式 */
         .message .msg-content .katex-display {
             margin: 8px 0;
             overflow-x: auto;
@@ -324,7 +323,6 @@
             cursor: not-allowed;
             transform: none;
         }
-        /* @提示下拉 */
         .mention-suggest {
             position: absolute;
             bottom: 100%;
@@ -472,6 +470,7 @@
             <span>📝 <code>**粗体**</code> <code>*斜体*</code> <code>`代码`</code> <code>$$公式$$</code></span>
             <span>🔗 <code>@用户名</code> 提及</span>
             <span><span class="key">Shift+Enter</span> 换行</span>
+            <span><span class="key">Enter</span> 发送</span>
             <span>🔒 HTML 已禁用</span>
         </div>
     </div>
@@ -485,7 +484,7 @@
         let mentionActive = false;
         let mentionIndex = -1;
 
-        // ========== 获取所有用户列表（用于 @提及）==========
+        // ========== 获取所有用户列表 ==========
         function loadUsers() {
             fetch('/api/users', { credentials: 'include' })
                 .then(r => r.json())
@@ -515,10 +514,10 @@
         function renderContent(text) {
             if (!text) return '';
             
-            // 先转义 HTML 特殊字符
+            // 转义 HTML 特殊字符
             let safe = escapeHtml(text);
             
-            // 处理 @提及（将 @用户名 转为高亮）
+            // 处理 @提及
             safe = safe.replace(/@(\w+)/g, (match, name) => {
                 return `<span class="mention">@${escapeHtml(name)}</span>`;
             });
@@ -536,7 +535,7 @@
                 return `%%KATEX_INLINE_${idx}%%`;
             });
             
-            // 使用 marked 渲染 Markdown（保留换行）
+            // 使用 marked 渲染 Markdown
             let html = marked.parse(safe);
             
             // 恢复 KaTeX 公式
@@ -604,6 +603,7 @@
 
             socket.on('clear_room', () => {
                 document.getElementById('messages').innerHTML = '';
+                addSystemMessage('💬 所有消息已被管理员清空');
             });
 
             socket.on('force_logout', () => {
@@ -656,11 +656,17 @@
         function mentionUser(name) {
             const input = document.getElementById('messageInput');
             input.focus();
-            // 如果输入框有内容，在末尾添加 @用户名
-            if (input.value.trim()) {
-                input.value += ` @${name}`;
+            const current = input.value;
+            // 检查光标位置是否有 @
+            const pos = input.selectionStart || current.length;
+            const before = current.substring(0, pos);
+            const after = current.substring(pos);
+            
+            // 如果光标前有 @，替换它
+            if (before.endsWith('@')) {
+                input.value = before.substring(0, before.length - 1) + `@${name} ` + after;
             } else {
-                input.value = `@${name} `;
+                input.value = current + ` @${name}`;
             }
             input.setSelectionRange(input.value.length, input.value.length);
             hideMentionSuggest();
@@ -669,7 +675,6 @@
         // ========== @提及提示 ==========
         function showMentionSuggest(query) {
             const suggest = document.getElementById('mentionSuggest');
-            const input = document.getElementById('messageInput');
             
             if (!query || query.length === 0) {
                 suggest.style.display = 'none';
@@ -711,8 +716,8 @@
         // ========== 发送消息 ==========
         function sendMessage() {
             const input = document.getElementById('messageInput');
-            const content = input.value.trim();
-            if (!content || !socket) return;
+            const content = input.value;
+            if (!content.trim() || !socket) return;
 
             socket.emit('message', {
                 room: room,
@@ -782,27 +787,27 @@
         // ========== 输入事件 ==========
         document.getElementById('messageInput').addEventListener('input', function(e) {
             const value = this.value;
-            // 检测 @ 符号
-            const atPos = value.lastIndexOf('@');
-            if (atPos !== -1) {
-                const query = value.substring(atPos + 1);
-                if (query.includes(' ')) {
-                    hideMentionSuggest();
-                } else {
-                    showMentionSuggest(query);
-                }
+            const cursorPos = this.selectionStart;
+            
+            // 查找光标前的 @
+            const beforeCursor = value.substring(0, cursorPos);
+            const atMatch = beforeCursor.match(/@([^\s]*)$/);
+            
+            if (atMatch) {
+                showMentionSuggest(atMatch[1]);
             } else {
                 hideMentionSuggest();
             }
         });
 
+        // ========== 键盘事件：Enter 发送，Shift+Enter 换行 ==========
         document.getElementById('messageInput').addEventListener('keydown', function(e) {
+            // ===== 关键修复：Enter 发送，Shift+Enter 换行 =====
             if (e.key === 'Enter' && !e.shiftKey) {
-                // 普通 Enter → 发送
                 e.preventDefault();
                 sendMessage();
             }
-            // Shift+Enter → 换行（默认行为）
+            // Shift+Enter 默认换行，不需要额外处理
             
             // @提示导航
             if (mentionActive) {
