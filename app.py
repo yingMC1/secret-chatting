@@ -6,11 +6,13 @@ import sqlite3
 import hashlib
 import json
 import os
-from datetime import datetime
+from flask_cors import CORS
 
 app = Flask(__name__)
 app.secret_key = 'your-secret-key-change-this-in-production'
-socketio = SocketIO(app, cors_allowed_origins="*")
+CORS(app)
+# 匹配 gevent worker
+socketio = SocketIO(app, cors_allowed_origins="*", async_mode="gevent")
 
 # ============ 数据库初始化 ============
 DB_PATH = 'chatroom.db'
@@ -291,4 +293,4 @@ def handle_admin_message(data):
 
 # ============ 启动 ============
 if __name__ == '__main__':
-    socketio.run(app, host='0.0.0.0', port=5000, debug=True)
+    socketio.run(app, host='0.0.0.0', port=5000, debug=False)
