@@ -1,11 +1,12 @@
 # -*- coding: utf-8 -*-
-from flask import Flask, render_template, request, jsonify, session, redirect, url_for
+from flask import Flask, render_template, request, jsonify, session, redirect, url_for, make_response
 from flask_socketio import SocketIO, emit, join_room, leave_room
 from functools import wraps
 import sqlite3
 import hashlib
-from datetime import datetime
+from datetime import datetime, timedelta
 import os
+import uuid
 
 app = Flask(__name__)
 
@@ -28,6 +29,7 @@ def init_db():
     conn = sqlite3.connect(DB_PATH)
     c = conn.cursor()
 
+    # 用户表（增加 device_id 字段）
     c.execute('''
         CREATE TABLE IF NOT EXISTS users (
             id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -35,10 +37,12 @@ def init_db():
             password TEXT NOT NULL,
             is_admin INTEGER DEFAULT 0,
             is_banned INTEGER DEFAULT 0,
+            device_id TEXT,
             created_at TEXT DEFAULT CURRENT_TIMESTAMP
         )
     ''')
 
+    # 消息表
     c.execute('''
         CREATE TABLE IF NOT EXISTS messages (
             id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -49,6 +53,7 @@ def init_db():
         )
     ''')
 
+    # 房间表
     c.execute('''
         CREATE TABLE IF NOT EXISTS rooms (
             id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -58,14 +63,25 @@ def init_db():
         )
     ''')
 
-    admin_pwd = hashlib.sha256('ying@akioi&1101'.encode()).hexdigest()
-
+    # 被封禁的设备ID黑名单
     c.execute('''
-        INSERT OR REPLACE INTO users (username, password, is_admin, is_banned) 
-        VALUES (?, ?, 1, 0)
-    ''', ('yingMC', admin_pwd))
+        CREATE TABLE IF NOT EXISTS banned_devices (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            device_id TEXT UNIQUE NOT NULL,
+            banned_at TEXT DEFAULT CURRENT_TIMESTAMP
+        )
+    ''')
 
+    # 初始化 yingMC
+    admin_pwd = hashlib.sha256('ying@akioi&1101'.encode()).hexdigest()
+    c.execute('''
+        INSERT OR REPLACE INTO users (username, password, is_admin, is_banned, device_id) 
+        VALUES (?, ?, 1, 0, ?)
+    ''', ('yingMC', admin_pwd, 'master-device'))
+
+    # 只保留 yingMC 为管理员
     c.execute('DELETE FROM users WHERE username != ? AND is_admin = 1', ('yingMC',))
+    # 只保留 public 房间
     c.execute('DELETE FROM rooms WHERE room_name != ?', ('public',))
     c.execute('''
         INSERT OR REPLACE INTO rooms (room_name, created_by) 
@@ -112,12 +128,23 @@ def admin_required(f):
     return decorated
 
 
+# ===== 仅 yingMC 可执行的管理员操作（授予/撤销）=====
+def yingmc_only(f):
+    @wraps(f)
+    def decorated(*args, **kwargs):
+        if 'username' not in session or session['username'] != 'yingMC':
+            return jsonify({'error': '只有所有者 yingMC 可以执行此操作'}), 403
+        return f(*args, **kwargs)
+    return decorated
+
+
 @app.before_request
 def before_request():
     if request.headers.get('X-Forwarded-Proto') == 'http':
         return redirect(request.url.replace('http://', 'https://'), 301)
 
 
+# ========== 路由 ==========
 @app.route('/')
 def index():
     if 'user_id' not in session:
@@ -178,13 +205,24 @@ def register():
     data = request.get_json()
     username = data.get('username')
     password = hash_password(data.get('password', ''))
+    device_id = data.get('device_id')   # 由前端生成并存储
 
     if username == 'yingMC':
         return jsonify({'error': '该用户名已被保留'}), 400
 
+    if not device_id:
+        return jsonify({'error': '设备标识缺失，请启用Cookie'}), 400
+
+    # 检查设备是否在黑名单
     conn = get_db()
+    banned = conn.execute('SELECT id FROM banned_devices WHERE device_id = ?', (device_id,)).fetchone()
+    if banned:
+        conn.close()
+        return jsonify({'error': '该设备已被封禁，无法注册'}), 403
+
     try:
-        conn.execute('INSERT INTO users (username, password) VALUES (?, ?)', (username, password))
+        conn.execute('INSERT INTO users (username, password, device_id) VALUES (?, ?, ?)',
+                     (username, password, device_id))
         conn.commit()
         conn.close()
         return jsonify({'success': True})
@@ -216,6 +254,16 @@ def get_messages(room):
     ''', (room,)).fetchall()
     conn.close()
     return jsonify([dict(m) for m in messages[::-1]])
+
+
+# ===== 获取管理员列表（用于前端显示紫色）=====
+@app.route('/api/admin_users')
+@login_required
+def get_admin_users():
+    conn = get_db()
+    admins = conn.execute('SELECT username FROM users WHERE is_admin = 1').fetchall()
+    conn.close()
+    return jsonify([a['username'] for a in admins])
 
 
 @app.route('/api/users')
@@ -250,11 +298,12 @@ def get_online_count():
     return jsonify({'count': len(online_users)})
 
 
+# ===== 封禁用户：同时封禁设备 =====
 @app.route('/api/ban/<int:user_id>', methods=['POST'])
 @admin_required
 def ban_user(user_id):
     conn = get_db()
-    user = conn.execute('SELECT is_admin, username FROM users WHERE id = ?', (user_id,)).fetchone()
+    user = conn.execute('SELECT is_admin, username, device_id FROM users WHERE id = ?', (user_id,)).fetchone()
 
     if not user:
         conn.close()
@@ -268,7 +317,14 @@ def ban_user(user_id):
         conn.close()
         return jsonify({'error': '不能封禁管理员'}), 400
 
+    # 封禁账号
     conn.execute('UPDATE users SET is_banned = 1 WHERE id = ?', (user_id,))
+    # 将设备ID加入黑名单
+    if user['device_id']:
+        try:
+            conn.execute('INSERT OR IGNORE INTO banned_devices (device_id) VALUES (?)', (user['device_id'],))
+        except:
+            pass
     conn.commit()
     conn.close()
     socketio.emit('force_logout', room=str(user_id))
@@ -290,8 +346,10 @@ def unban_user(user_id):
     return jsonify({'success': True})
 
 
+# ===== 授予管理员权限：仅 yingMC 可操作 =====
 @app.route('/api/make_admin/<int:user_id>', methods=['POST'])
 @admin_required
+@yingmc_only
 def make_admin(user_id):
     conn = get_db()
     user = conn.execute('SELECT is_admin, username FROM users WHERE id = ?', (user_id,)).fetchone()
@@ -307,8 +365,10 @@ def make_admin(user_id):
     return jsonify({'success': True, 'username': user['username']})
 
 
+# ===== 撤销管理员权限：仅 yingMC 可操作 =====
 @app.route('/api/revoke_admin/<int:user_id>', methods=['POST'])
 @admin_required
+@yingmc_only
 def revoke_admin(user_id):
     conn = get_db()
     user = conn.execute('SELECT is_admin, username FROM users WHERE id = ?', (user_id,)).fetchone()
@@ -323,7 +383,6 @@ def revoke_admin(user_id):
         conn.close()
         return jsonify({'error': '❌ 不能撤销所有者 yingMC 的管理员权限'}), 400
 
-    # 允许管理员撤销自己的管理员权限
     conn.execute('UPDATE users SET is_admin = 0 WHERE id = ?', (user_id,))
     conn.commit()
     conn.close()
@@ -355,7 +414,7 @@ def delete_user(user_id):
     return jsonify({'success': True, 'username': user['username']})
 
 
-# ===== 修复：yingMC 能删自己的消息，其他管理员不能删 yingMC 的消息 =====
+# ===== 删除消息：yingMC 可删自己的，其他管理员不能删 yingMC 的 =====
 @app.route('/api/delete_message/<int:msg_id>', methods=['DELETE'])
 @login_required
 def delete_message(msg_id):
@@ -368,12 +427,11 @@ def delete_message(msg_id):
     user = conn.execute('SELECT username, is_admin FROM users WHERE id = ?', (session['user_id'],)).fetchone()
     conn.close()
 
-    # ===== 如果是 yingMC 的消息 =====
+    # 如果是 yingMC 的消息
     if msg['username'] == 'yingMC':
         # 只有 yingMC 本人可以删除自己的消息
         if user['username'] != 'yingMC':
             return jsonify({'error': '❌ 不能删除所有者 yingMC 的消息'}), 400
-        # yingMC 本人可以删除，继续执行
 
     # 权限检查：管理员 或 消息作者本人
     if user['is_admin'] or user['username'] == msg['username']:
@@ -387,11 +445,7 @@ def delete_message(msg_id):
     return jsonify({'error': '无权删除此消息'}), 403
 
 
-# ===== 移除清空消息 API =====
-# @app.route('/api/clear_messages/<room>', methods=['DELETE'])
-# @admin_required
-# def clear_messages(room):
-#     ...
+# ===== 清空消息功能已移除 =====
 
 
 @app.route('/admin')
