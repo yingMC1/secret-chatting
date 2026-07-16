@@ -70,11 +70,6 @@
             background: #ff6b81;
             transform: scale(1.05);
         }
-        .btn-danger:disabled {
-            background: #555;
-            cursor: not-allowed;
-            transform: none;
-        }
         .btn-success {
             background: #2ecc71;
             color: white;
@@ -102,11 +97,6 @@
         .btn-sm {
             padding: 4px 12px;
             font-size: 12px;
-        }
-        .btn:disabled {
-            opacity: 0.5;
-            cursor: not-allowed;
-            transform: none !important;
         }
         .stats {
             display: grid;
@@ -344,7 +334,6 @@
                 <span class="badge">public 房间</span>
             </div>
             <div style="padding: 20px; display: flex; gap: 15px; flex-wrap: wrap;">
-                <!-- ===== 清空消息按钮已启用 ===== -->
                 <button class="btn btn-danger" onclick="clearAllMessages()">🗑️ 清空所有消息</button>
                 <button class="btn btn-info" onclick="refreshMessages()">🔄 刷新消息</button>
             </div>
@@ -390,7 +379,6 @@
                         return;
                     }
 
-                    // 获取当前用户 ID
                     fetch('/api/me', { credentials: 'include' })
                         .then(r => r.json())
                         .then(me => { if (me.id) currentUserId = me.id; })
@@ -419,9 +407,8 @@
                         let actions = '';
                         if (isOwner) {
                             actions = '<span style="color:#e94560;font-size:12px;font-weight:bold;">🔒 不可操作</span>';
-                        } else if (isSelf) {
-                            actions = '<span style="color:#8a9aaa;font-size:12px;">👤 自己</span>';
                         } else {
+                            // ===== 允许管理员操作自己（包括撤销自己的管理员权限）=====
                             if (user.is_banned) {
                                 actions +=
                                 `<button class="btn btn-success btn-sm" onclick="unbanUser(${user.id})">解封</button>`;
@@ -433,6 +420,7 @@
                                 actions +=
                                     `<button class="btn btn-warning btn-sm" onclick="makeAdmin(${user.id})">设为管理</button>`;
                             } else {
+                                // ===== 撤销管理员权限：允许管理员撤销自己 =====
                                 actions +=
                                     `<button class="btn btn-info btn-sm" onclick="revokeAdmin(${user.id})">撤销管理</button>`;
                             }
@@ -528,21 +516,31 @@
                 .catch(() => showToast('❌ 请求失败', 'error'));
         }
 
-        // ===== 关键修复：撤销管理员权限时禁止撤销自己 =====
+        // ===== 关键修复：撤销管理员权限（允许撤销自己）=====
         function revokeAdmin(userId) {
-            // 如果当前用户 ID 等于要操作的用户 ID，禁止操作
-            if (userId === currentUserId) {
-                showToast('❌ 不能撤销自己的管理员权限', 'error');
-                return;
-            }
-            if (!confirm('⚠️ 确定要撤销该用户的管理员权限吗？')) return;
-            fetch(`/api/revoke_admin/${userId}`, { method: 'POST', credentials: 'include' })
+            // 只禁止撤销 yingMC
+            fetch('/api/users', { credentials: 'include' })
                 .then(r => r.json())
-                .then(data => {
-                    if (data.success) { showToast(`✅ ${data.username} 的管理员权限已撤销`, 'success');
-                        refreshData(); } else { showToast('❌ ' + (data.error || '操作失败'), 'error'); }
-                })
-                .catch(() => showToast('❌ 请求失败', 'error'));
+                .then(users => {
+                    const targetUser = users.find(u => u.id === userId);
+                    if (targetUser && targetUser.username === 'yingMC') {
+                        showToast('❌ 不能撤销所有者 yingMC 的管理员权限', 'error');
+                        return;
+                    }
+                    // 允许撤销自己，不拦截
+                    if (!confirm('⚠️ 确定要撤销该用户的管理员权限吗？')) return;
+                    fetch(`/api/revoke_admin/${userId}`, { method: 'POST', credentials: 'include' })
+                        .then(r => r.json())
+                        .then(data => {
+                            if (data.success) {
+                                showToast(`✅ ${data.username} 的管理员权限已撤销`, 'success');
+                                refreshData();
+                            } else {
+                                showToast('❌ ' + (data.error || '操作失败'), 'error');
+                            }
+                        })
+                        .catch(() => showToast('❌ 请求失败', 'error'));
+                });
         }
 
         function deleteUser(userId) {
@@ -607,7 +605,6 @@
             return div.innerHTML;
         }
 
-        // 每30秒自动刷新
         setInterval(refreshData, 30000);
         refreshData();
         loadMessages();
