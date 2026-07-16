@@ -3,686 +3,668 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>管理后台</title>
-    <script src="https://cdn.socket.io/4.5.0/socket.io.min.js"></script>
-    <!-- KaTeX -->
-    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/katex@0.16.9/dist/katex.min.css">
-    <script src="https://cdn.jsdelivr.net/npm/katex@0.16.9/dist/katex.min.js"></script>
-    <!-- Marked -->
-    <script src="https://cdn.jsdelivr.net/npm/marked@11.1.1/marked.min.js"></script>
+    <title>👑 管理面板 - 聊天室</title>
     <style>
-        * { margin: 0; padding: 0; box-sizing: border-box; }
-        body { 
-            font-family: 'Segoe UI', sans-serif; 
-            background: #1a1a2e; 
-            color: #eee; 
-            min-height: 100vh; 
-            padding: 20px; 
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
         }
-        .container { max-width: 1200px; margin: 0 auto; }
-        
-        .header { 
-            display: flex; 
-            justify-content: space-between; 
-            align-items: center; 
-            margin-bottom: 24px; 
-            padding-bottom: 16px; 
-            border-bottom: 1px solid #333; 
-            flex-wrap: wrap;
-            gap: 12px;
+        body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            background: #1a1a2e;
+            min-height: 100vh;
+            padding: 20px;
         }
-        .header h1 { color: #e94560; font-size: 24px; }
-        .header a { color: #66aaff; text-decoration: none; }
-        .header .user-info { color: #888; font-size: 14px; }
-
-        .stats { 
-            display: grid; 
-            grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); 
-            gap: 16px; 
-            margin-bottom: 24px; 
+        .container {
+            max-width: 1200px;
+            margin: 0 auto;
         }
-        .stats .card { 
-            background: #16213e; 
-            padding: 16px 20px; 
-            border-radius: 12px; 
-            border-left: 4px solid #e94560; 
-        }
-        .stats .card .num { font-size: 28px; font-weight: bold; color: #e94560; }
-        .stats .card .label { font-size: 13px; color: #888; margin-top: 4px; }
-
-        .tabs { 
-            display: flex; 
-            gap: 4px; 
-            margin-bottom: 20px; 
-            background: #16213e; 
-            border-radius: 10px; 
-            padding: 4px; 
-            flex-wrap: wrap;
-        }
-        .tabs button { 
-            padding: 10px 24px; 
-            border: none; 
-            border-radius: 8px; 
-            background: transparent; 
-            color: #888; 
-            cursor: pointer; 
-            font-size: 14px; 
-            transition: 0.3s; 
-        }
-        .tabs button:hover { color: #eee; }
-        .tabs button.active { background: #0f3460; color: #fff; }
-
-        .tab-content { display: none; }
-        .tab-content.active { display: block; }
-
-        .table-wrapper {
-            overflow-x: auto;
-            background: #16213e;
-            border-radius: 12px;
-            padding: 4px 0;
-        }
-        table { 
-            width: 100%; 
-            border-collapse: collapse; 
-            min-width: 500px;
-        }
-        th { 
-            background: #0f3460; 
-            padding: 12px 16px; 
-            text-align: left; 
-            font-size: 13px; 
-            color: #aaa; 
-            white-space: nowrap;
-        }
-        td { 
-            padding: 10px 16px; 
-            border-bottom: 1px solid #1a2a4a; 
-            font-size: 14px; 
-            word-break: break-word;
-        }
-        tr:hover td { background: #1a2a4a; }
-
-        .btn { 
-            padding: 4px 14px; 
-            border: none; 
-            border-radius: 6px; 
-            cursor: pointer; 
-            font-size: 12px; 
-            transition: 0.3s; 
-        }
-        .btn-danger { background: #e94560; color: #fff; }
-        .btn-danger:hover { background: #c73652; }
-        .btn-success { background: #0f8a5a; color: #fff; }
-        .btn-success:hover { background: #0f6b4a; }
-        .btn-refresh { background: #2a65ff; color: #fff; }
-        .btn-refresh:hover { background: #1a4fd6; }
-        .btn-primary { background: #2a65ff; color: #fff; }
-        .btn-primary:hover { background: #1a4fd6; }
-        .btn-warning { background: #f0a030; color: #fff; }
-        .btn-warning:hover { background: #d08820; }
-        .btn-delete { background: #cc3344; color: #fff; }
-        .btn-delete:hover { background: #aa2233; }
-
-        .badge { padding: 2px 10px; border-radius: 12px; font-size: 11px; display: inline-block; }
-        .badge-admin { background: #e94560; color: #fff; }
-        .badge-banned { background: #cc3344; color: #fff; }
-        .badge-normal { background: #2a4a6a; color: #aaa; }
-        .badge-room { background: #2a65ff; color: #fff; }
-
-        .search-box { 
-            display: flex; 
-            gap: 10px; 
-            margin-bottom: 16px; 
-            flex-wrap: wrap;
-            align-items: center;
-        }
-        .search-box input { 
-            flex: 1; 
-            min-width: 150px;
-            padding: 8px 14px; 
-            border: none; 
-            border-radius: 8px; 
-            background: #1a2a4a; 
-            color: #eee; 
-            font-size: 14px; 
-            outline: none; 
-        }
-        .search-box input::placeholder { color: #6688aa; }
-
-        .empty { text-align: center; padding: 40px; color: #666; }
-
-        .toast { 
-            position: fixed; 
-            bottom: 30px; 
-            right: 30px; 
-            background: #0f3460; 
-            padding: 12px 24px; 
-            border-radius: 10px; 
-            color: #fff; 
-            font-size: 14px; 
-            box-shadow: 0 4px 16px rgba(0,0,0,0.4); 
-            display: none; 
-            z-index: 100; 
-            max-width: 90%;
-        }
-        .toast.show { display: block; animation: fadeIn 0.3s; }
-        .toast.error { background: #cc3344; }
-        .toast.success { background: #0f8a5a; }
-        @keyframes fadeIn { from { opacity: 0; transform: translateY(20px); } to { opacity: 1; transform: translateY(0); } }
-
-        .loading {
-            text-align: center;
-            padding: 40px;
-            color: #6688aa;
-        }
-
-        .room-info {
-            background: #16213e;
-            padding: 12px 20px;
-            border-radius: 10px;
-            margin-bottom: 16px;
+        .header {
+            background: #0f3460;
+            padding: 20px 30px;
+            border-radius: 15px;
+            color: white;
             display: flex;
+            justify-content: space-between;
             align-items: center;
+            flex-wrap: wrap;
+            gap: 15px;
+            margin-bottom: 30px;
+            border-bottom: 3px solid #e94560;
+        }
+        .header h1 {
+            font-size: 24px;
+        }
+        .header h1 span {
+            color: #e94560;
+        }
+        .header-actions {
+            display: flex;
             gap: 12px;
-            border-left: 4px solid #2a65ff;
             flex-wrap: wrap;
         }
-
-        .msg-content { 
-            max-width: 450px; 
-            word-wrap: break-word; 
+        .btn {
+            padding: 8px 20px;
+            border: none;
+            border-radius: 20px;
+            cursor: pointer;
             font-size: 14px;
-            line-height: 1.6;
+            font-weight: bold;
+            transition: all 0.3s;
+            text-decoration: none;
+            display: inline-block;
         }
-        .msg-content p { margin: 2px 0; }
-        .msg-content strong { color: #fff; }
-        .msg-content em { color: #ddd; }
-        .msg-content code { 
-            background: #1a2a4a; 
-            padding: 1px 6px; 
-            border-radius: 4px; 
-            font-size: 12px; 
-            color: #e94560;
-            font-family: 'Consolas', monospace;
+        .btn-back {
+            background: #2d4059;
+            color: white;
         }
-        .msg-content pre { 
-            background: #0d1a2a; 
-            padding: 8px 12px; 
-            border-radius: 6px; 
-            overflow-x: auto; 
+        .btn-back:hover {
+            background: #3d5070;
+        }
+        .btn-danger {
+            background: #e94560;
+            color: white;
+        }
+        .btn-danger:hover {
+            background: #ff6b81;
+            transform: scale(1.05);
+        }
+        .btn-success {
+            background: #2ecc71;
+            color: white;
+        }
+        .btn-success:hover {
+            background: #3ddc84;
+            transform: scale(1.05);
+        }
+        .btn-warning {
+            background: #f5a623;
+            color: #1a1a2e;
+        }
+        .btn-warning:hover {
+            background: #ffc107;
+            transform: scale(1.05);
+        }
+        .btn-info {
+            background: #3498db;
+            color: white;
+        }
+        .btn-info:hover {
+            background: #5bade3;
+            transform: scale(1.05);
+        }
+        .btn-sm {
+            padding: 4px 12px;
             font-size: 12px;
-            margin: 4px 0;
-            border: 1px solid #2a3a5a;
         }
-        .msg-content pre code { 
-            background: transparent; 
-            padding: 0; 
-            color: #aaddff; 
+        .stats {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
+            gap: 15px;
+            margin-bottom: 25px;
         }
-        .msg-content blockquote { 
-            border-left: 3px solid #e94560; 
-            padding-left: 12px; 
-            margin: 4px 0;
-            color: #aaa; 
+        .stat-card {
+            background: #16213e;
+            padding: 15px 20px;
+            border-radius: 12px;
+            color: white;
+            text-align: center;
+            border: 1px solid #2d4059;
         }
-        .msg-content .katex { font-size: 1.1em; }
-        .msg-content .katex-display { margin: 4px 0; }
-        .msg-content ul, .msg-content ol { padding-left: 20px; margin: 2px 0; }
-        .msg-content a { color: #66aaff; text-decoration: none; }
-        .msg-content a:hover { text-decoration: underline; }
-        .msg-content table { 
-            border-collapse: collapse; 
-            margin: 4px 0; 
+        .stat-card .number {
+            font-size: 28px;
+            font-weight: bold;
+            color: #e94560;
+        }
+        .stat-card .label {
+            font-size: 13px;
+            color: #8a9aaa;
+            margin-top: 5px;
+        }
+        .panel {
+            background: #16213e;
+            border-radius: 15px;
+            overflow: hidden;
+            border: 1px solid #2d4059;
+            margin-bottom: 30px;
+        }
+        .panel-header {
+            background: #0f3460;
+            padding: 15px 25px;
+            color: white;
+            font-weight: bold;
+            font-size: 18px;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            flex-wrap: wrap;
+            gap: 10px;
+        }
+        .panel-header .badge {
+            background: #e94560;
+            padding: 3px 12px;
+            border-radius: 12px;
             font-size: 13px;
         }
-        .msg-content table th, .msg-content table td { 
-            border: 1px solid #444; 
-            padding: 2px 8px; 
+        .table-wrapper {
+            overflow-x: auto;
+            padding: 5px;
         }
-        .msg-content table th { background: #0f3460; }
-        .msg-content img { max-width: 100%; border-radius: 6px; }
-        .msg-content hr { border: none; border-top: 1px solid #444; margin: 8px 0; }
-
-        @media (max-width: 600px) { 
-            .stats { grid-template-columns: 1fr 1fr; }
-            .header { flex-direction: column; align-items: flex-start; }
-            .tabs button { padding: 8px 14px; font-size: 13px; }
-            th, td { padding: 8px 10px; font-size: 12px; }
-            .msg-content { max-width: 200px; }
+        table {
+            width: 100%;
+            border-collapse: collapse;
+            color: white;
+            font-size: 14px;
+        }
+        th {
+            background: #1a2a4a;
+            padding: 12px 15px;
+            text-align: left;
+            color: #8a9aaa;
+            font-weight: 600;
+            border-bottom: 2px solid #2d4059;
+            white-space: nowrap;
+        }
+        td {
+            padding: 12px 15px;
+            border-bottom: 1px solid #2d4059;
+            vertical-align: middle;
+        }
+        tr:hover td {
+            background: #1a2a4a;
+        }
+        .status-badge {
+            padding: 3px 12px;
+            border-radius: 12px;
+            font-size: 12px;
+            font-weight: bold;
+            display: inline-block;
+        }
+        .status-admin {
+            background: #f5a623;
+            color: #1a1a2e;
+        }
+        .status-owner {
+            background: #e94560;
+            color: white;
+        }
+        .status-user {
+            background: #2d4059;
+            color: #8a9aaa;
+        }
+        .status-banned {
+            background: #e74c3c;
+            color: white;
+        }
+        .status-active {
+            background: #2ecc71;
+            color: white;
+        }
+        .actions {
+            display: flex;
+            gap: 5px;
+            flex-wrap: wrap;
+        }
+        .empty-state {
+            text-align: center;
+            padding: 40px 20px;
+            color: #8a9aaa;
+        }
+        .empty-state .icon {
+            font-size: 48px;
+            margin-bottom: 15px;
+        }
+        .toast {
+            position: fixed;
+            top: 20px;
+            right: 20px;
+            padding: 15px 25px;
+            border-radius: 12px;
+            color: white;
+            font-weight: bold;
+            z-index: 9999;
+            animation: slideIn 0.3s ease;
+            max-width: 400px;
+        }
+        .toast-success {
+            background: #2ecc71;
+        }
+        .toast-error {
+            background: #e74c3c;
+        }
+        .toast-info {
+            background: #3498db;
+        }
+        @keyframes slideIn {
+            from { transform: translateX(100%); opacity: 0; }
+            to { transform: translateX(0); opacity: 1; }
+        }
+        @media (max-width: 768px) {
+            .header {
+                padding: 15px 20px;
+            }
+            .header h1 {
+                font-size: 18px;
+            }
+            th, td {
+                padding: 8px 10px;
+                font-size: 12px;
+            }
+            .actions {
+                flex-direction: column;
+                gap: 3px;
+            }
+            .btn-sm {
+                padding: 3px 8px;
+                font-size: 11px;
+            }
         }
     </style>
 </head>
 <body>
-<div class="container">
-    <div class="header">
-        <h1>🔧 管理后台</h1>
-        <div style="display:flex;align-items:center;gap:16px;flex-wrap:wrap;">
-            <a href="/">← 返回聊天室</a>
-            <span class="user-info" id="adminName">👤 管理员：加载中...</span>
-            <button class="btn btn-refresh" onclick="loadAll()">🔄 刷新</button>
+    <div class="container">
+        <!-- 头部 -->
+        <div class="header">
+            <h1>👑 <span>管理面板</span></h1>
+            <div class="header-actions">
+                <a href="/" class="btn btn-back">⬅ 返回聊天室</a>
+                <button class="btn btn-danger" onclick="refreshData()">🔄 刷新</button>
+            </div>
+        </div>
+
+        <!-- 统计 -->
+        <div class="stats" id="stats">
+            <div class="stat-card">
+                <div class="number" id="totalUsers">0</div>
+                <div class="label">总用户</div>
+            </div>
+            <div class="stat-card">
+                <div class="number" id="onlineUsers">0</div>
+                <div class="label">在线用户</div>
+            </div>
+            <div class="stat-card">
+                <div class="number" id="adminUsers">0</div>
+                <div class="label">管理员</div>
+            </div>
+            <div class="stat-card">
+                <div class="number" id="bannedUsers">0</div>
+                <div class="label">已封禁</div>
+            </div>
+        </div>
+
+        <!-- 用户列表 -->
+        <div class="panel">
+            <div class="panel-header">
+                <span>👥 用户管理</span>
+                <span class="badge" id="userCount">0 个用户</span>
+            </div>
+            <div class="table-wrapper">
+                <table>
+                    <thead>
+                        <tr>
+                            <th>ID</th>
+                            <th>用户名</th>
+                            <th>角色</th>
+                            <th>状态</th>
+                            <th>注册时间</th>
+                            <th>操作</th>
+                        </tr>
+                    </thead>
+                    <tbody id="userTableBody">
+                        <tr>
+                            <td colspan="6" class="empty-state">
+                                <div class="icon">⏳</div>
+                                <p>加载中...</p>
+                            </td>
+                        </tr>
+                    </tbody>
+                </table>
+            </div>
+        </div>
+
+        <!-- 消息管理 -->
+        <div class="panel">
+            <div class="panel-header">
+                <span>💬 消息管理</span>
+                <span class="badge">public 房间</span>
+            </div>
+            <div style="padding: 20px; display: flex; gap: 15px; flex-wrap: wrap;">
+                <button class="btn btn-danger" onclick="clearAllMessages()">🗑️ 清空所有消息</button>
+                <button class="btn btn-info" onclick="refreshMessages()">🔄 刷新消息</button>
+            </div>
+            <div class="table-wrapper">
+                <table>
+                    <thead>
+                        <tr>
+                            <th>ID</th>
+                            <th>用户</th>
+                            <th>内容</th>
+                            <th>时间</th>
+                            <th>操作</th>
+                        </tr>
+                    </thead>
+                    <tbody id="messageTableBody">
+                        <tr>
+                            <td colspan="5" class="empty-state">
+                                <div class="icon">💬</div>
+                                <p>暂无消息</p>
+                            </td>
+                        </tr>
+                    </tbody>
+                </table>
+            </div>
         </div>
     </div>
 
-    <div class="stats" id="stats">
-        <div class="card"><div class="num" id="totalUsers">-</div><div class="label">总用户</div></div>
-        <div class="card"><div class="num" id="totalAdmins">-</div><div class="label">管理员</div></div>
-        <div class="card"><div class="num" id="totalBanned">-</div><div class="label">已封禁</div></div>
-        <div class="card"><div class="num" id="totalMessages">-</div><div class="label">总消息</div></div>
-    </div>
+    <script>
+        // ========== 加载用户列表 ==========
+        function loadUsers() {
+            fetch('/api/users', { credentials: 'include' })
+                .then(r => {
+                    if (r.status === 403) {
+                        window.location.href = '/';
+                        return;
+                    }
+                    return r.json();
+                })
+                .then(data => {
+                    if (!data) return;
+                    const tbody = document.getElementById('userTableBody');
+                    
+                    if (data.length === 0) {
+                        tbody.innerHTML = `
+                            <tr>
+                                <td colspan="6" class="empty-state">
+                                    <div class="icon">👻</div>
+                                    <p>暂无用户</p>
+                                </td>
+                            </tr>
+                        `;
+                        return;
+                    }
 
-    <div class="tabs">
-        <button class="active" data-tab="users">👥 用户管理</button>
-        <button data-tab="messages">💬 消息记录</button>
-    </div>
-
-    <div id="tab-users" class="tab-content active">
-        <div class="search-box">
-            <input type="text" id="userSearch" placeholder="搜索用户名..." oninput="filterUsers()">
-        </div>
-        <div class="table-wrapper">
-            <table>
-                <thead><tr><th>ID</th><th>用户名</th><th>角色</th><th>状态</th><th>注册时间</th><th>操作</th></tr></thead>
-                <tbody id="userTableBody"><tr><td colspan="6" class="loading">加载中...</td></tr></tbody>
-            </table>
-        </div>
-    </div>
-
-    <div id="tab-messages" class="tab-content">
-        <div class="room-info">
-            <span class="label">📌 当前房间：</span>
-            <span class="badge badge-room">public</span>
-            <span style="color:#888;font-size:13px;margin-left:8px;" id="msgCount"></span>
-            <span style="color:#888;font-size:12px;margin-left:12px;">支持 Markdown · KaTeX</span>
-        </div>
-        <div class="search-box">
-            <input type="text" id="msgSearch" placeholder="搜索消息内容..." oninput="filterMessages()">
-        </div>
-        <div class="table-wrapper">
-            <table>
-                <thead><tr><th>ID</th><th>用户</th><th>消息内容</th><th>时间</th><th>操作</th></tr></thead>
-                <tbody id="msgTableBody"><tr><td colspan="5" class="loading">加载中...</td></tr></tbody>
-            </table>
-        </div>
-    </div>
-</div>
-
-<div class="toast" id="toast"></div>
-
-<script>
-    // ============================================================
-    //  配置
-    // ============================================================
-    const API_BASE = '/api';
-    const socket = io();
-
-    // ============================================================
-    //  数据
-    // ============================================================
-    let users = [];
-    let messages = [];
-    let currentAdmin = '';
-    let currentUserId = null;
-
-    // ============================================================
-    //  安全函数
-    // ============================================================
-    function escapeHtml(text) {
-        if (!text) return '';
-        const div = document.createElement('div');
-        div.textContent = text;
-        return div.innerHTML;
-    }
-
-    // ============================================================
-    //  渲染 Markdown + KaTeX
-    // ============================================================
-    function renderMarkdown(text) {
-        if (!text) return '';
-        try {
-            let result = escapeHtml(text);
-            result = result.replace(/\$\$([\s\S]*?)\$\$/g, function(match, content) {
-                try {
-                    return katex.renderToString(content.trim(), { 
-                        displayMode: true, 
-                        throwOnError: false,
-                        trust: true
+                    let html = '';
+                    let total = 0, admins = 0, banned = 0;
+                    
+                    data.forEach(user => {
+                        total++;
+                        if (user.is_admin) admins++;
+                        if (user.is_banned) banned++;
+                        
+                        // 判断角色
+                        let roleBadge = '';
+                        if (user.username === 'yingMC') {
+                            roleBadge = '<span class="status-badge status-owner">👑 所有者</span>';
+                        } else if (user.is_admin) {
+                            roleBadge = '<span class="status-badge status-admin">⭐ 管理员</span>';
+                        } else {
+                            roleBadge = '<span class="status-badge status-user">👤 用户</span>';
+                        }
+                        
+                        // 判断状态
+                        let statusBadge = user.is_banned 
+                            ? '<span class="status-badge status-banned">🚫 已封禁</span>'
+                            : '<span class="status-badge status-active">✅ 正常</span>';
+                        
+                        // 操作按钮
+                        let actions = '';
+                        const isOwner = user.username === 'yingMC';
+                        const isSelf = user.id === parseInt(document.querySelector('[data-user-id]')?.dataset?.userId || '0');
+                        
+                        if (!isOwner) {
+                            if (user.is_banned) {
+                                actions += `<button class="btn btn-success btn-sm" onclick="unbanUser(${user.id})">解封</button>`;
+                            } else {
+                                actions += `<button class="btn btn-danger btn-sm" onclick="banUser(${user.id})">封禁</button>`;
+                            }
+                            
+                            if (!user.is_admin) {
+                                actions += `<button class="btn btn-warning btn-sm" onclick="makeAdmin(${user.id})">设为管理</button>`;
+                            } else {
+                                actions += `<button class="btn btn-info btn-sm" onclick="revokeAdmin(${user.id})">撤销管理</button>`;
+                            }
+                            
+                            actions += `<button class="btn btn-danger btn-sm" onclick="deleteUser(${user.id})">删除</button>`;
+                        } else {
+                            actions = '<span style="color:#8a9aaa;font-size:12px;">不可操作</span>';
+                        }
+                        
+                        html += `
+                            <tr>
+                                <td>${user.id}</td>
+                                <td><strong>${escapeHtml(user.username)}</strong></td>
+                                <td>${roleBadge}</td>
+                                <td>${statusBadge}</td>
+                                <td>${user.created_at ? new Date(user.created_at).toLocaleString('zh-CN') : '-'}</td>
+                                <td class="actions">${actions}</td>
+                            </tr>
+                        `;
                     });
-                } catch(e) {
-                    return match;
-                }
-            });
-            result = result.replace(/\$(?!\$)([^\$]+)\$(?!\$)/g, function(match, content) {
-                try {
-                    return katex.renderToString(content.trim(), { 
-                        displayMode: false, 
-                        throwOnError: false,
-                        trust: true
+                    
+                    tbody.innerHTML = html;
+                    
+                    // 更新统计
+                    document.getElementById('totalUsers').textContent = total;
+                    document.getElementById('adminUsers').textContent = admins;
+                    document.getElementById('bannedUsers').textContent = banned;
+                    document.getElementById('userCount').textContent = `${total} 个用户`;
+                })
+                .catch(err => {
+                    console.error('加载用户失败:', err);
+                    document.getElementById('userTableBody').innerHTML = `
+                        <tr>
+                            <td colspan="6" class="empty-state">
+                                <div class="icon">❌</div>
+                                <p>加载失败，请刷新重试</p>
+                            </td>
+                        </tr>
+                    `;
+                });
+        }
+
+        // ========== 加载在线人数 ==========
+        function loadOnlineCount() {
+            fetch('/api/online_count', { credentials: 'include' })
+                .then(r => r.json())
+                .then(data => {
+                    document.getElementById('onlineUsers').textContent = data.count || 0;
+                })
+                .catch(() => {});
+        }
+
+        // ========== 加载消息列表 ==========
+        function loadMessages() {
+            fetch('/api/messages/public', { credentials: 'include' })
+                .then(r => r.json())
+                .then(data => {
+                    const tbody = document.getElementById('messageTableBody');
+                    
+                    if (!data || data.length === 0) {
+                        tbody.innerHTML = `
+                            <tr>
+                                <td colspan="5" class="empty-state">
+                                    <div class="icon">💬</div>
+                                    <p>暂无消息</p>
+                                </td>
+                            </tr>
+                        `;
+                        return;
+                    }
+                    
+                    // 显示最新的20条
+                    const recent = data.slice(-20).reverse();
+                    let html = '';
+                    recent.forEach(msg => {
+                        html += `
+                            <tr>
+                                <td>${msg.id}</td>
+                                <td><strong>${escapeHtml(msg.username)}</strong></td>
+                                <td style="max-width:300px;word-break:break-all;">${escapeHtml(msg.content)}</td>
+                                <td>${msg.timestamp ? new Date(msg.timestamp).toLocaleString('zh-CN') : '-'}</td>
+                                <td>
+                                    <button class="btn btn-danger btn-sm" onclick="deleteMessage(${msg.id})">删除</button>
+                                </td>
+                            </tr>
+                        `;
                     });
-                } catch(e) {
-                    return match;
-                }
-            });
-            const html = marked.parse(result, {
-                breaks: true,
-                gfm: true,
-                headerIds: false,
-                mangle: false
-            });
-            return html;
-        } catch(e) {
-            console.error('渲染错误:', e);
-            return escapeHtml(text);
+                    tbody.innerHTML = html;
+                })
+                .catch(err => {
+                    console.error('加载消息失败:', err);
+                });
         }
-    }
 
-    // ============================================================
-    //  Socket.IO 监听
-    // ============================================================
-    socket.on('system_message', function(data) {
-        showToast('📢 ' + escapeHtml(data.content), false);
-    });
-
-    socket.on('user_banned', function(data) {
-        showToast('🚫 用户 ' + escapeHtml(data.username) + ' 已被封禁！', false);
-        loadAll();
-    });
-
-    socket.on('user_unbanned', function(data) {
-        showToast('✅ 用户 ' + escapeHtml(data.username) + ' 已解封', false);
-        loadAll();
-    });
-
-    socket.on('message_deleted', function(data) {
-        showToast('🗑️ 消息已删除 (ID: ' + data.id + ')', false);
-        loadAll();
-    });
-
-    // ============================================================
-    //  加载数据
-    // ============================================================
-    async function loadAll() {
-        try {
-            const [usersRes, msgRes, meRes] = await Promise.all([
-                fetch(`${API_BASE}/users`),
-                fetch(`${API_BASE}/messages/public`),
-                fetch(`${API_BASE}/me`)
-            ]);
-            if (usersRes.ok) users = await usersRes.json();
-            if (msgRes.ok) messages = await msgRes.json();
-            if (meRes.ok) {
-                const me = await meRes.json();
-                currentUserId = me.id;
-                currentAdmin = me.username || '管理员';
-            }
-
-            renderAll();
-        } catch (error) {
-            console.error('加载失败:', error);
-            renderAll();
+        // ========== 用户操作 ==========
+        function banUser(userId) {
+            if (!confirm('确定要封禁该用户吗？')) return;
+            fetch(`/api/ban/${userId}`, { method: 'POST', credentials: 'include' })
+                .then(r => r.json())
+                .then(data => {
+                    if (data.success) {
+                        showToast('✅ 用户已封禁', 'success');
+                        refreshData();
+                    } else {
+                        showToast('❌ ' + (data.error || '封禁失败'), 'error');
+                    }
+                })
+                .catch(() => showToast('❌ 请求失败', 'error'));
         }
-    }
 
-    // ============================================================
-    //  渲染
-    // ============================================================
-
-    function renderStats() {
-        const total = users.length;
-        const admins = users.filter(u => u.is_admin).length;
-        const banned = users.filter(u => u.is_banned).length;
-        document.getElementById('totalUsers').textContent = total;
-        document.getElementById('totalAdmins').textContent = admins;
-        document.getElementById('totalBanned').textContent = banned;
-        document.getElementById('totalMessages').textContent = messages.length;
-        document.getElementById('adminName').textContent = `👤 管理员：${escapeHtml(currentAdmin || '未知')}`;
-        document.getElementById('msgCount').textContent = `共 ${messages.length} 条消息`;
-    }
-
-    function renderUsers() {
-        const search = document.getElementById('userSearch').value.toLowerCase();
-        const filtered = users.filter(u => u.username && u.username.toLowerCase().includes(search));
-        const tbody = document.getElementById('userTableBody');
-        if (filtered.length === 0) {
-            tbody.innerHTML = '<tr><td colspan="6" class="empty">暂无用户</td></tr>';
-            return;
+        function unbanUser(userId) {
+            if (!confirm('确定要解封该用户吗？')) return;
+            fetch(`/api/unban/${userId}`, { method: 'POST', credentials: 'include' })
+                .then(r => r.json())
+                .then(data => {
+                    if (data.success) {
+                        showToast('✅ 用户已解封', 'success');
+                        refreshData();
+                    } else {
+                        showToast('❌ ' + (data.error || '解封失败'), 'error');
+                    }
+                })
+                .catch(() => showToast('❌ 请求失败', 'error'));
         }
-        tbody.innerHTML = filtered.map(u => {
-            const isSelf = u.id === currentUserId;
-            return `
-            <tr>
-                <td>${u.id || '-'}</td>
-                <td><strong>${escapeHtml(u.username || '未知')}</strong>${isSelf ? ' <span style="color:#66aaff;font-size:11px;">(我)</span>' : ''}</td>
-                <td>${u.is_admin ? '<span class="badge badge-admin">管理员</span>' : '普通用户'}</td>
-                <td>${u.is_banned ? '<span class="badge badge-banned">已封禁</span>' : '<span class="badge badge-normal">正常</span>'}</td>
-                <td>${escapeHtml(u.created_at || '-')}</td>
-                <td>
-                    <div style="display:flex;gap:4px;flex-wrap:wrap;">
-                        ${u.is_admin ? 
-                            (isSelf ? 
-                                '<span style="color:#888;font-size:11px;">不可操作自己</span>' :
-                                `<button class="btn btn-warning" onclick="revokeAdmin(${u.id}, '${escapeHtml(u.username)}')">撤销管理</button>`
-                            ) :
-                            (isSelf ? 
-                                '<span style="color:#888;font-size:11px;">不可操作自己</span>' :
-                                `<button class="btn btn-primary" onclick="makeAdmin(${u.id}, '${escapeHtml(u.username)}')">设为管理</button>`
-                            )
-                        }
-                        ${!u.is_admin && !isSelf ? 
-                            (u.is_banned ? 
-                                `<button class="btn btn-success" onclick="unbanUser(${u.id}, '${escapeHtml(u.username)}')">解封</button>` :
-                                `<button class="btn btn-danger" onclick="banUser(${u.id}, '${escapeHtml(u.username)}')">封禁</button>`
-                            ) : ''
-                        }
-                        ${!u.is_admin && !isSelf ? 
-                            `<button class="btn btn-delete" onclick="deleteUser(${u.id}, '${escapeHtml(u.username)}')">删除</button>` :
-                            ''
-                        }
-                    </div>
-                </td>
-            </tr>
-        `}).join('');
-    }
 
-    function filterUsers() { renderUsers(); }
-
-    function renderMessages() {
-        const search = document.getElementById('msgSearch').value.toLowerCase();
-        const filtered = messages.filter(m => {
-            return m.content && m.content.toLowerCase().includes(search);
-        });
-        const tbody = document.getElementById('msgTableBody');
-        if (filtered.length === 0) {
-            tbody.innerHTML = '<tr><td colspan="5" class="empty">暂无消息</td></tr>';
-            return;
+        function makeAdmin(userId) {
+            if (!confirm('确定要授予该用户管理员权限吗？')) return;
+            fetch(`/api/make_admin/${userId}`, { method: 'POST', credentials: 'include' })
+                .then(r => r.json())
+                .then(data => {
+                    if (data.success) {
+                        showToast(`✅ ${data.username} 已成为管理员`, 'success');
+                        refreshData();
+                    } else {
+                        showToast('❌ ' + (data.error || '操作失败'), 'error');
+                    }
+                })
+                .catch(() => showToast('❌ 请求失败', 'error'));
         }
-        const display = [...filtered].reverse().slice(0, 200);
-        tbody.innerHTML = display.map(m => {
-            const rendered = renderMarkdown(m.content || '');
-            const safeUsername = escapeHtml(m.username || '匿名');
-            const safeTime = escapeHtml(m.timestamp || '-');
-            return `
-            <tr>
-                <td>${m.id || '-'}</td>
-                <td><strong>${safeUsername}</strong></td>
-                <td><div class="msg-content">${rendered}</div></td>
-                <td>${safeTime}</td>
-                <td>
-                    <button class="btn btn-danger" onclick="deleteMessage(${m.id})">删除</button>
-                </td>
-            </tr>
-        `}).join('');
-    }
 
-    function filterMessages() { renderMessages(); }
-
-    function renderAll() {
-        renderStats();
-        renderUsers();
-        renderMessages();
-    }
-
-    // ============================================================
-    //  操作函数
-    // ============================================================
-
-    // ========== 封禁用户 ==========
-    async function banUser(id, username) {
-        if (!confirm(`确认封禁用户 "${username}"？`)) return;
-        try {
-            const res = await fetch(`${API_BASE}/ban/${id}`, { method: 'POST' });
-            const data = await res.json();
-            if (data.success) {
-                showToast('✅ 已封禁用户：' + username, false, 'success');
-                setTimeout(loadAll, 500);
-            } else {
-                showToast('⚠️ 封禁失败: ' + (data.error || '未知错误'), true);
-            }
-        } catch (e) {
-            showToast('⚠️ 请求失败', true);
+        function revokeAdmin(userId) {
+            if (!confirm('确定要撤销该用户的管理员权限吗？')) return;
+            fetch(`/api/revoke_admin/${userId}`, { method: 'POST', credentials: 'include' })
+                .then(r => r.json())
+                .then(data => {
+                    if (data.success) {
+                        showToast(`✅ ${data.username} 的管理员权限已撤销`, 'success');
+                        refreshData();
+                    } else {
+                        showToast('❌ ' + (data.error || '操作失败'), 'error');
+                    }
+                })
+                .catch(() => showToast('❌ 请求失败', 'error'));
         }
-    }
 
-    // ========== 解封用户 ==========
-    async function unbanUser(id, username) {
-        try {
-            const res = await fetch(`${API_BASE}/unban/${id}`, { method: 'POST' });
-            const data = await res.json();
-            if (data.success) {
-                showToast('✅ 已解封用户：' + username, false, 'success');
-                setTimeout(loadAll, 500);
-            } else {
-                showToast('⚠️ 解封失败: ' + (data.error || '未知错误'), true);
-            }
-        } catch (e) {
-            showToast('⚠️ 请求失败', true);
+        function deleteUser(userId) {
+            if (!confirm('⚠️ 确定要删除该用户吗？\n该用户的所有消息也将被删除！')) return;
+            fetch(`/api/delete_user/${userId}`, { method: 'DELETE', credentials: 'include' })
+                .then(r => r.json())
+                .then(data => {
+                    if (data.success) {
+                        showToast(`✅ 用户 ${data.username} 已删除`, 'success');
+                        refreshData();
+                    } else {
+                        showToast('❌ ' + (data.error || '删除失败'), 'error');
+                    }
+                })
+                .catch(() => showToast('❌ 请求失败', 'error'));
         }
-    }
 
-    // ========== 设为管理员 ==========
-    async function makeAdmin(id, username) {
-        if (!confirm(`确认将用户 "${username}" 设为管理员？`)) return;
-        try {
-            const res = await fetch(`${API_BASE}/make_admin/${id}`, { method: 'POST' });
-            const data = await res.json();
-            if (data.success) {
-                showToast(`✅ 已授予 ${username} 管理员权限`, false, 'success');
-                setTimeout(loadAll, 500);
-            } else {
-                showToast('⚠️ 操作失败: ' + (data.error || '未知错误'), true);
-            }
-        } catch (e) {
-            showToast('⚠️ 请求失败', true);
+        function deleteMessage(msgId) {
+            if (!confirm('确定要删除该消息吗？')) return;
+            fetch(`/api/delete_message/${msgId}`, { method: 'DELETE', credentials: 'include' })
+                .then(r => r.json())
+                .then(data => {
+                    if (data.success) {
+                        showToast('✅ 消息已删除', 'success');
+                        loadMessages();
+                    } else {
+                        showToast('❌ ' + (data.error || '删除失败'), 'error');
+                    }
+                })
+                .catch(() => showToast('❌ 请求失败', 'error'));
         }
-    }
 
-    // ========== 撤销管理员 ==========
-    async function revokeAdmin(id, username) {
-        if (!confirm(`确认撤销用户 "${username}" 的管理员权限？`)) return;
-        try {
-            const res = await fetch(`${API_BASE}/revoke_admin/${id}`, { method: 'POST' });
-            const data = await res.json();
-            if (data.success) {
-                showToast(`✅ 已撤销 ${username} 的管理员权限`, false, 'success');
-                setTimeout(loadAll, 500);
-            } else {
-                showToast('⚠️ 操作失败: ' + (data.error || '未知错误'), true);
-            }
-        } catch (e) {
-            showToast('⚠️ 请求失败', true);
+        function clearAllMessages() {
+            if (!confirm('⚠️ 确定要清空所有消息吗？此操作不可恢复！')) return;
+            fetch('/api/clear_messages/public', { method: 'DELETE', credentials: 'include' })
+                .then(r => r.json())
+                .then(data => {
+                    if (data.success) {
+                        showToast('✅ 所有消息已清空', 'success');
+                        loadMessages();
+                    } else {
+                        showToast('❌ ' + (data.error || '清空失败'), 'error');
+                    }
+                })
+                .catch(() => showToast('❌ 请求失败', 'error'));
         }
-    }
 
-    // ========== 删除用户（管理员专用）==========
-    async function deleteUser(id, username) {
-        if (!confirm(`⚠️ 确认删除用户 "${username}"？\n此操作将同时删除该用户的所有消息，不可恢复！`)) return;
-        try {
-            const res = await fetch(`${API_BASE}/delete_user/${id}`, { method: 'DELETE' });
-            const data = await res.json();
-            if (data.success) {
-                showToast(`✅ 已删除用户：${username}`, false, 'success');
-                setTimeout(loadAll, 500);
-            } else {
-                showToast('⚠️ 删除失败: ' + (data.error || '未知错误'), true);
-            }
-        } catch (e) {
-            showToast('⚠️ 请求失败: ' + e.message, true);
+        // ========== 刷新 ==========
+        function refreshData() {
+            loadUsers();
+            loadOnlineCount();
+            showToast('🔄 数据已刷新', 'info');
         }
-    }
 
-    // ========== 删除消息 ==========
-    async function deleteMessage(id) {
-        if (!confirm('确认删除该消息？此操作不可撤销！')) return;
-        try {
-            const res = await fetch(`${API_BASE}/delete_message/${id}`, { method: 'DELETE' });
-            const data = await res.json();
-            if (data.success) {
-                showToast('✅ 已删除消息 (ID: ' + id + ')', false, 'success');
-                setTimeout(loadAll, 500);
-            } else {
-                showToast('⚠️ 删除失败: ' + (data.error || '未知错误'), true);
-            }
-        } catch (e) {
-            showToast('⚠️ 请求失败: ' + e.message, true);
+        function refreshMessages() {
+            loadMessages();
+            showToast('🔄 消息已刷新', 'info');
         }
-    }
 
-    // ============================================================
-    //  Toast
-    // ============================================================
-    function showToast(msg, isError = false, type = '') {
-        const t = document.getElementById('toast');
-        t.textContent = msg;
-        t.className = 'toast';
-        if (isError) t.classList.add('error');
-        if (type === 'success') t.classList.add('success');
-        t.classList.add('show');
-        clearTimeout(t._timer);
-        t._timer = setTimeout(() => t.classList.remove('show'), 5000);
-    }
+        // ========== Toast 提示 ==========
+        function showToast(message, type = 'info') {
+            const existing = document.querySelector('.toast');
+            if (existing) existing.remove();
+            
+            const toast = document.createElement('div');
+            toast.className = `toast toast-${type}`;
+            toast.textContent = message;
+            document.body.appendChild(toast);
+            
+            setTimeout(() => {
+                toast.style.opacity = '0';
+                toast.style.transition = 'opacity 0.3s';
+                setTimeout(() => toast.remove(), 300);
+            }, 3000);
+        }
 
-    // ============================================================
-    //  Tab切换
-    // ============================================================
-    document.querySelectorAll('.tabs button').forEach(btn => {
-        btn.addEventListener('click', function() {
-            document.querySelectorAll('.tabs button').forEach(b => b.classList.remove('active'));
-            this.classList.add('active');
-            document.querySelectorAll('.tab-content').forEach(tc => tc.classList.remove('active'));
-            document.getElementById('tab-' + this.dataset.tab).classList.add('active');
-        });
-    });
+        // ========== 工具函数 ==========
+        function escapeHtml(text) {
+            if (!text) return '';
+            const div = document.createElement('div');
+            div.textContent = text;
+            return div.innerHTML;
+        }
 
-    // ============================================================
-    //  自动刷新
-    // ============================================================
-    let autoRefreshTimer = null;
+        // ========== 自动刷新 ==========
+        // 每30秒自动刷新
+        setInterval(refreshData, 30000);
 
-    function startAutoRefresh() {
-        if (autoRefreshTimer) clearInterval(autoRefreshTimer);
-        autoRefreshTimer = setInterval(() => {
-            refreshSilent();
-        }, 8000);
-    }
-
-    async function refreshSilent() {
-        try {
-            const [usersRes, msgRes] = await Promise.all([
-                fetch(`${API_BASE}/users`),
-                fetch(`${API_BASE}/messages/public`)
-            ]);
-            if (usersRes.ok) users = await usersRes.json();
-            if (msgRes.ok) messages = await msgRes.json();
-            renderAll();
-        } catch(e) {}
-    }
-
-    // ============================================================
-    //  初始化
-    // ============================================================
-    loadAll();
-    startAutoRefresh();
-    console.log('✅ 管理后台已加载');
-    console.log('📌 支持 Markdown 和 KaTeX 渲染（安全模式）');
-</script>
+        // ========== 启动 ==========
+        refreshData();
+        loadMessages();
+    </script>
 </body>
 </html>
