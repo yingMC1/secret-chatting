@@ -9,10 +9,10 @@ import os
 
 app = Flask(__name__)
 
-# ========== 从环境变量读取密钥，Railway 部署必备 ==========
+# ========== 从环境变量读取密钥 ==========
 app.secret_key = os.environ.get('SECRET_KEY', 'yingmc-chatroom-secret-key-2026')
 
-# ========== 生产环境 Session 配置 ==========
+# ========== Session 配置 ==========
 app.config.update(
     SESSION_COOKIE_SECURE=True,
     SESSION_COOKIE_HTTPONLY=True,
@@ -89,9 +89,6 @@ def get_db():
 
 def hash_password(pwd):
     return hashlib.sha256(pwd.encode()).hexdigest()
-
-def is_owner(username):
-    return username == 'yingMC'
 
 # ========== 装饰器 ==========
 def login_required(f):
@@ -253,7 +250,6 @@ def ban_user(user_id):
         conn.close()
         return jsonify({'error': '用户不存在'}), 404
     
-    # ===== 禁止封禁 yingMC =====
     if user['username'] == 'yingMC':
         conn.close()
         return jsonify({'error': '❌ 不能封禁所有者 yingMC'}), 400
@@ -310,7 +306,6 @@ def revoke_admin(user_id):
         conn.close()
         return jsonify({'error': '该用户不是管理员'}), 400
     
-    # ===== 禁止撤销 yingMC 的管理员权限 =====
     if user['username'] == 'yingMC':
         conn.close()
         return jsonify({'error': '❌ 不能撤销所有者 yingMC 的管理员权限'}), 400
@@ -334,7 +329,6 @@ def delete_user(user_id):
         conn.close()
         return jsonify({'error': '用户不存在'}), 404
     
-    # ===== 禁止删除 yingMC =====
     if user['username'] == 'yingMC':
         conn.close()
         return jsonify({'error': '❌ 不能删除所有者 yingMC'}), 400
@@ -375,9 +369,7 @@ def delete_message(msg_id):
 @app.route('/api/clear_messages/<room>', methods=['DELETE'])
 @admin_required
 def clear_messages(room):
-    if room != 'public':
-        return jsonify({'error': '房间不存在'}), 404
-    
+    # 允许管理员清空所有房间消息
     conn = get_db()
     conn.execute('DELETE FROM messages WHERE room = ?', (room,))
     conn.commit()
