@@ -1,2 +1,5 @@
 [build]
-install = ["python@3.11.11"]
+install = "pip install -r requirements.txt"
+
+[start]
+cmd = "gunicorn --worker-class eventlet -w 1 app:app"
