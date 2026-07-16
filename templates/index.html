@@ -4,16 +4,12 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>💬 聊天室</title>
-    
-    <!-- KaTeX CSS -->
+
     <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/katex@0.16.9/dist/katex.min.css">
-    
-    <!-- Markdown 解析库 -->
     <script src="https://cdn.jsdelivr.net/npm/marked@11.1.1/marked.min.js"></script>
-    <!-- KaTeX 渲染库 -->
     <script src="https://cdn.jsdelivr.net/npm/katex@0.16.9/dist/katex.min.js"></script>
-    
     <script src="https://cdn.socket.io/4.5.0/socket.io.min.js"></script>
+
     <style>
         * {
             margin: 0;
@@ -34,7 +30,7 @@
             height: 90vh;
             background: #16213e;
             border-radius: 20px;
-            box-shadow: 0 20px 60px rgba(0,0,0,0.5);
+            box-shadow: 0 20px 60px rgba(0, 0, 0, 0.5);
             display: flex;
             flex-direction: column;
             overflow: hidden;
@@ -133,8 +129,14 @@
             animation: fadeIn 0.3s ease;
         }
         @keyframes fadeIn {
-            from { opacity: 0; transform: translateY(10px); }
-            to { opacity: 1; transform: translateY(0); }
+            from {
+                opacity: 0;
+                transform: translateY(10px);
+            }
+            to {
+                opacity: 1;
+                transform: translateY(0);
+            }
         }
         .message.own {
             align-self: flex-end;
@@ -178,7 +180,7 @@
             color: #ffe066;
         }
         .message .msg-time {
-            color: rgba(255,255,255,0.5);
+            color: rgba(255, 255, 255, 0.5);
             font-size: 11px;
         }
         /* ===== 关键修复：保留换行 ===== */
@@ -188,19 +190,18 @@
             white-space: pre-wrap;
             word-wrap: break-word;
         }
-        /* Markdown 样式 */
         .message .msg-content p {
             margin: 4px 0;
         }
         .message .msg-content code {
-            background: rgba(0,0,0,0.3);
+            background: rgba(0, 0, 0, 0.3);
             padding: 2px 6px;
             border-radius: 4px;
             font-size: 13px;
             font-family: 'Courier New', monospace;
         }
         .message .msg-content pre {
-            background: rgba(0,0,0,0.4);
+            background: rgba(0, 0, 0, 0.4);
             padding: 10px;
             border-radius: 8px;
             overflow-x: auto;
@@ -224,7 +225,7 @@
         .message .msg-content a:hover {
             text-decoration: underline;
         }
-        .message .msg-content ul, 
+        .message .msg-content ul,
         .message .msg-content ol {
             padding-left: 20px;
             margin: 4px 0;
@@ -236,11 +237,11 @@
         }
         .message .msg-content th,
         .message .msg-content td {
-            border: 1px solid rgba(255,255,255,0.2);
+            border: 1px solid rgba(255, 255, 255, 0.2);
             padding: 4px 10px;
         }
         .message .msg-content th {
-            background: rgba(0,0,0,0.3);
+            background: rgba(0, 0, 0, 0.3);
         }
         .message .msg-content img {
             max-width: 100%;
@@ -263,7 +264,7 @@
         .message .delete-btn {
             background: none;
             border: none;
-            color: rgba(255,255,255,0.4);
+            color: rgba(255, 255, 255, 0.4);
             cursor: pointer;
             font-size: 12px;
             margin-left: 10px;
@@ -334,7 +335,7 @@
             max-height: 150px;
             overflow-y: auto;
             display: none;
-            box-shadow: 0 10px 30px rgba(0,0,0,0.5);
+            box-shadow: 0 10px 30px rgba(0, 0, 0, 0.5);
             z-index: 100;
             border: 1px solid #2d4059;
         }
@@ -388,6 +389,7 @@
         .format-hint .key {
             color: #5bade3;
         }
+
         @media (max-width: 600px) {
             .chat-container {
                 height: 100vh;
@@ -431,7 +433,6 @@
 </head>
 <body>
     <div class="chat-container">
-        <!-- 头部 -->
         <div class="chat-header">
             <h1>💬 <span>聊天室</span></h1>
             <div class="header-right">
@@ -444,19 +445,15 @@
             </div>
         </div>
 
-        <!-- 房间信息 -->
         <div class="room-info">
             <span>📌 当前房间：<span class="room-name">public</span></span>
             <span id="onlineCount">👤 在线: 0</span>
         </div>
 
-        <!-- 消息区域 -->
         <div class="messages" id="messages"></div>
 
-        <!-- 正在输入提示 -->
         <div class="typing-indicator" id="typingIndicator"></div>
 
-        <!-- 输入区域 -->
         <div class="input-area">
             <div class="input-wrapper">
                 <input type="text" id="messageInput" placeholder="输入消息... @用户名 提及他人" autofocus>
@@ -464,8 +461,7 @@
             </div>
             <button id="sendBtn" onclick="sendMessage()">发送</button>
         </div>
-        
-        <!-- 格式提示 -->
+
         <div class="format-hint">
             <span>📝 <code>**粗体**</code> <code>*斜体*</code> <code>`代码`</code> <code>$$公式$$</code></span>
             <span>🔗 <code>@用户名</code> 提及</span>
@@ -484,7 +480,6 @@
         let mentionActive = false;
         let mentionIndex = -1;
 
-        // ========== 获取所有用户列表 ==========
         function loadUsers() {
             fetch('/api/users', { credentials: 'include' })
                 .then(r => r.json())
@@ -496,12 +491,11 @@
                 .catch(err => console.error('加载用户列表失败:', err));
         }
 
-        // ========== 配置 marked（禁用 HTML）==========
         const renderer = new marked.Renderer();
         renderer.html = function(html) {
             return '';
         };
-        
+
         marked.setOptions({
             renderer: renderer,
             breaks: true,
@@ -510,19 +504,15 @@
             mangle: false
         });
 
-        // ========== 渲染 Markdown + KaTeX + @提及 ==========
         function renderContent(text) {
             if (!text) return '';
-            
-            // 转义 HTML 特殊字符
+
             let safe = escapeHtml(text);
-            
-            // 处理 @提及
+
             safe = safe.replace(/@(\w+)/g, (match, name) => {
                 return `<span class="mention">@${escapeHtml(name)}</span>`;
             });
-            
-            // 提取并保护 KaTeX 公式
+
             const formulas = [];
             safe = safe.replace(/\$\$([\s\S]*?)\$\$/g, (match, formula) => {
                 const idx = formulas.length;
@@ -534,15 +524,13 @@
                 formulas.push({ type: 'inline', content: formula });
                 return `%%KATEX_INLINE_${idx}%%`;
             });
-            
-            // 使用 marked 渲染 Markdown
+
             let html = marked.parse(safe);
-            
-            // 恢复 KaTeX 公式
+
             formulas.forEach((f, idx) => {
-                const placeholder = f.type === 'block' 
-                    ? `%%KATEX_BLOCK_${idx}%%`
-                    : `%%KATEX_INLINE_${idx}%%`;
+                const placeholder = f.type === 'block' ?
+                    `%%KATEX_BLOCK_${idx}%%` :
+                    `%%KATEX_INLINE_${idx}%%`;
                 try {
                     let rendered;
                     if (f.type === 'block') {
@@ -563,11 +551,10 @@
                     html = html.replace(placeholder, `<code>错误公式: ${escapeHtml(f.content)}</code>`);
                 }
             });
-            
+
             return html;
         }
 
-        // ========== 初始化 Socket ==========
         function initSocket() {
             socket = io({
                 transports: ['websocket', 'polling']
@@ -616,20 +603,19 @@
             });
         }
 
-        // ========== 添加消息 ==========
         function addMessage(data, isOwn) {
             const container = document.getElementById('messages');
             const div = document.createElement('div');
             div.className = `message ${isOwn ? 'own' : 'other'}`;
             div.dataset.id = data.id;
-            
+
             const time = new Date(data.timestamp).toLocaleTimeString('zh-CN', { hour: '2-digit', minute: '2-digit' });
-            
-            const deleteBtn = (isOwn || isAdmin) ? 
+
+            const deleteBtn = (isOwn || isAdmin) ?
                 `<button class="delete-btn" onclick="deleteMessage(${data.id})">✕</button>` : '';
-            
+
             const renderedHtml = renderContent(data.content);
-            
+
             div.innerHTML = `
                 <div class="msg-header">
                     <span class="msg-username" onclick="mentionUser('${escapeHtml(data.username)}')">${escapeHtml(data.username)}</span>
@@ -638,7 +624,7 @@
                 </div>
                 <div class="msg-content">${renderedHtml}</div>
             `;
-            
+
             container.appendChild(div);
             container.scrollTop = container.scrollHeight;
         }
@@ -652,17 +638,14 @@
             container.scrollTop = container.scrollHeight;
         }
 
-        // ========== @提及功能 ==========
         function mentionUser(name) {
             const input = document.getElementById('messageInput');
             input.focus();
             const current = input.value;
-            // 检查光标位置是否有 @
             const pos = input.selectionStart || current.length;
             const before = current.substring(0, pos);
             const after = current.substring(pos);
-            
-            // 如果光标前有 @，替换它
+
             if (before.endsWith('@')) {
                 input.value = before.substring(0, before.length - 1) + `@${name} ` + after;
             } else {
@@ -672,25 +655,24 @@
             hideMentionSuggest();
         }
 
-        // ========== @提及提示 ==========
         function showMentionSuggest(query) {
             const suggest = document.getElementById('mentionSuggest');
-            
+
             if (!query || query.length === 0) {
                 suggest.style.display = 'none';
                 return;
             }
-            
-            const matches = allUsers.filter(u => 
-                u.toLowerCase().includes(query.toLowerCase()) && 
+
+            const matches = allUsers.filter(u =>
+                u.toLowerCase().includes(query.toLowerCase()) &&
                 u !== username
             );
-            
+
             if (matches.length === 0) {
                 suggest.style.display = 'none';
                 return;
             }
-            
+
             suggest.innerHTML = '';
             matches.forEach((name, idx) => {
                 const item = document.createElement('div');
@@ -701,7 +683,7 @@
                 };
                 suggest.appendChild(item);
             });
-            
+
             mentionIndex = -1;
             suggest.style.display = 'block';
             mentionActive = true;
@@ -713,7 +695,6 @@
             mentionIndex = -1;
         }
 
-        // ========== 发送消息 ==========
         function sendMessage() {
             const input = document.getElementById('messageInput');
             const content = input.value;
@@ -728,71 +709,65 @@
             hideMentionSuggest();
         }
 
-        // ========== 删除消息 ==========
         function deleteMessage(msgId) {
             if (!confirm('确定要删除这条消息吗？')) return;
             fetch(`/api/delete_message/${msgId}`, {
-                method: 'DELETE',
-                credentials: 'include'
-            })
-            .then(r => r.json())
-            .then(data => {
-                if (!data.success) alert(data.error || '删除失败');
-            })
-            .catch(err => alert('删除失败: ' + err));
+                    method: 'DELETE',
+                    credentials: 'include'
+                })
+                .then(r => r.json())
+                .then(data => {
+                    if (!data.success) alert(data.error || '删除失败');
+                })
+                .catch(err => alert('删除失败: ' + err));
         }
 
-        // ========== 退出登录 ==========
         function logout() {
             if (confirm('确定要退出登录吗？')) {
                 fetch('/api/logout', {
-                    method: 'POST',
-                    credentials: 'include'
-                })
-                .then(() => {
-                    if (socket) socket.disconnect();
-                    window.location.href = '/login';
-                })
-                .catch(() => {
-                    window.location.href = '/login';
-                });
+                        method: 'POST',
+                        credentials: 'include'
+                    })
+                    .then(() => {
+                        if (socket) socket.disconnect();
+                        window.location.href = '/login';
+                    })
+                    .catch(() => {
+                        window.location.href = '/login';
+                    });
             }
         }
 
-        // ========== 工具函数 ==========
         function escapeHtml(text) {
             const div = document.createElement('div');
             div.textContent = text;
             return div.innerHTML;
         }
 
-        // ========== 加载历史消息 ==========
         function loadMessages() {
             fetch(`/api/messages/${room}`, {
-                credentials: 'include'
-            })
-            .then(r => r.json())
-            .then(data => {
-                if (Array.isArray(data)) {
-                    const container = document.getElementById('messages');
-                    container.innerHTML = '';
-                    data.forEach(msg => {
-                        addMessage(msg, msg.username === username);
-                    });
-                }
-            })
-            .catch(err => console.error('加载消息失败:', err));
+                    credentials: 'include'
+                })
+                .then(r => r.json())
+                .then(data => {
+                    if (Array.isArray(data)) {
+                        const container = document.getElementById('messages');
+                        container.innerHTML = '';
+                        data.forEach(msg => {
+                            addMessage(msg, msg.username === username);
+                        });
+                    }
+                })
+                .catch(err => console.error('加载消息失败:', err));
         }
 
-        // ========== 输入事件 ==========
         document.getElementById('messageInput').addEventListener('input', function(e) {
             const value = this.value;
             const cursorPos = this.selectionStart;
-            
-            // 查找光标前的 @
+
             const beforeCursor = value.substring(0, cursorPos);
             const atMatch = beforeCursor.match(/@([^\s]*)$/);
-            
+
             if (atMatch) {
                 showMentionSuggest(atMatch[1]);
             } else {
@@ -800,20 +775,17 @@
             }
         });
 
-        // ========== 键盘事件：Enter 发送，Shift+Enter 换行 ==========
+        // ===== 关键修复：Enter 发送，Shift+Enter 换行 =====
         document.getElementById('messageInput').addEventListener('keydown', function(e) {
-            // ===== 关键修复：Enter 发送，Shift+Enter 换行 =====
             if (e.key === 'Enter' && !e.shiftKey) {
                 e.preventDefault();
                 sendMessage();
             }
-            // Shift+Enter 默认换行，不需要额外处理
-            
-            // @提示导航
+
             if (mentionActive) {
                 const items = document.querySelectorAll('#mentionSuggest .suggest-item');
                 if (items.length === 0) return;
-                
+
                 if (e.key === 'ArrowDown') {
                     e.preventDefault();
                     mentionIndex = (mentionIndex + 1) % items.length;
@@ -837,14 +809,12 @@
             }
         });
 
-        // 点击其他地方关闭提示
         document.addEventListener('click', function(e) {
             if (!e.target.closest('.input-wrapper')) {
                 hideMentionSuggest();
             }
         });
 
-        // ========== 启动 ==========
         loadUsers();
         initSocket();
         loadMessages();
