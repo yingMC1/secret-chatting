@@ -36,19 +36,16 @@ REGISTER_LIMIT = 1
 REGISTER_LIMIT_SEC = 60
 
 # ============================================================
-#  数据库初始化（强制重建）
+#  数据库初始化 + 修复（强制清理）
 # ============================================================
 def init_db():
-    """初始化数据库，如果表不存在则创建"""
-    print("🔧 正在初始化数据库...")
-    
-    # 如果数据库不存在，或者表不存在，重新创建
-    db_exists = os.path.exists(DB_PATH)
+    """初始化数据库，修复所有用户问题"""
+    print("🔧 正在初始化/修复数据库...")
     
     conn = sqlite3.connect(DB_PATH, timeout=10)
     c = conn.cursor()
     
-    # 创建 users 表
+    # ===== 1. 创建所有表 =====
     c.execute('''
         CREATE TABLE IF NOT EXISTS users (
             id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -60,7 +57,6 @@ def init_db():
         )
     ''')
     
-    # 创建 messages 表
     c.execute('''
         CREATE TABLE IF NOT EXISTS messages (
             id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -71,7 +67,6 @@ def init_db():
         )
     ''')
     
-    # 创建 rooms 表
     c.execute('''
         CREATE TABLE IF NOT EXISTS rooms (
             id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -81,7 +76,6 @@ def init_db():
         )
     ''')
     
-    # 创建 ban_list 表（修复 "no such table: ban_list" 错误）
     c.execute('''
         CREATE TABLE IF NOT EXISTS ban_list (
             id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -92,25 +86,61 @@ def init_db():
         )
     ''')
     
-    # 检查是否有管理员用户
-    admin_exists = c.execute("SELECT id FROM users WHERE username = 'yingMC'").fetchone()
+    # ===== 2. 删除所有非法用户 =====
+    # 删除 admin 用户
+    c.execute("DELETE FROM users WHERE username = 'admin'")
+    print("🗑️ 已删除 admin 用户")
     
-    if not admin_exists:
-        print("👤 创建管理员用户: yingMC")
-        admin_pwd = hashlib.sha256('admin123'.encode()).hexdigest()
+    # 删除空用户名
+    c.execute("DELETE FROM users WHERE username IS NULL OR username = ''")
+    print("🗑️ 已删除空用户名用户")
+    
+    # 删除重复的 yingMC（保留第一个）
+    c.execute('''
+        DELETE FROM users 
+        WHERE username = 'yingMC' 
+        AND id NOT IN (SELECT MIN(id) FROM users WHERE username = 'yingMC')
+    ''')
+    
+    # ===== 3. 确保 yingMC 存在且是管理员 =====
+    admin_pwd = hashlib.sha256('admin123'.encode()).hexdigest()
+    
+    # 检查 yingMC 是否存在
+    yingmc = c.execute("SELECT id FROM users WHERE username = 'yingMC'").fetchone()
+    
+    if yingmc:
+        # 存在，设置为管理员
+        c.execute("UPDATE users SET is_admin = 1, is_banned = 0 WHERE username = 'yingMC'")
+        print("✅ yingMC 已设置为管理员")
+    else:
+        # 不存在，创建
         c.execute('INSERT INTO users (username, password, is_admin) VALUES (?, ?, 1)', ('yingMC', admin_pwd))
+        print("✅ 已创建 yingMC 管理员用户")
     
-    # 检查是否有 public 房间
+    # ===== 4. 所有其他用户取消管理员权限 =====
+    c.execute("UPDATE users SET is_admin = 0 WHERE username != 'yingMC'")
+    
+    # ===== 5. 确保 public 房间存在 =====
     room_exists = c.execute("SELECT id FROM rooms WHERE room_name = 'public'").fetchone()
     if not room_exists:
-        print("🏠 创建默认房间: public")
         c.execute('INSERT INTO rooms (room_name, created_by) VALUES (?, ?)', ('public', 'system'))
+        print("🏠 已创建 public 房间")
     
     conn.commit()
     conn.close()
-    print("✅ 数据库初始化完成")
+    
+    # ===== 6. 打印当前用户列表 =====
+    conn = sqlite3.connect(DB_PATH, timeout=10)
+    c = conn.cursor()
+    users = c.execute("SELECT id, username, is_admin, is_banned FROM users").fetchall()
+    print("📋 当前用户列表:")
+    for u in users:
+        print(f"   ID: {u[0]}, 用户名: {u[1]}, 管理员: {u[2]}, 封禁: {u[3]}")
+    conn.close()
+    
+    print("✅ 数据库初始化/修复完成")
 
-# 强制初始化数据库
+# 运行数据库修复
 init_db()
 
 def get_db():
@@ -181,7 +211,6 @@ def index():
     if is_ip_or_device_banned():
         return "你的设备或IP已被管理员封禁", 403
 
-    # 如果未登录，重定向到登录页
     if 'user_id' not in session:
         resp = make_response(redirect(url_for('login_page')))
         if not device_id:
@@ -189,13 +218,11 @@ def index():
             resp.set_cookie("device_id", device_id, max_age=365*24*3600, httponly=True, samesite='Lax')
         return resp
     
-    # 获取用户信息
     conn = get_db()
     user = conn.execute('SELECT username, is_admin, is_banned FROM users WHERE id = ?', (session['user_id'],)).fetchone()
     rooms = conn.execute('SELECT room_name FROM rooms').fetchall()
     conn.close()
     
-    # ===== 修复：如果用户不存在，清除session并跳转登录 =====
     if user is None:
         session.clear()
         resp = make_response(redirect(url_for('login_page')))
@@ -204,12 +231,10 @@ def index():
             resp.set_cookie("device_id", device_id, max_age=365*24*3600, httponly=True, samesite='Lax')
         return resp
     
-    # 检查用户是否被封禁
     if user['is_banned']:
         session.clear()
         return '您账号已被封禁', 403
     
-    # 渲染模板
     try:
         resp = make_response(render_template(
             'index.html',
@@ -219,7 +244,6 @@ def index():
         ))
     except Exception as e:
         print(f"❌ 渲染模板错误: {e}")
-        # 如果模板不存在，返回简单页面
         return f"聊天室运行中，但模板文件缺失。错误: {e}", 500
     
     if not device_id:
@@ -394,7 +418,6 @@ def unban_user(user_id):
     
     return jsonify({'success': True})
 
-# ===== 删除消息（修复版） =====
 @app.route('/api/delete_message/<int:msg_id>', methods=['DELETE'])
 @login_required
 @owner_required
@@ -404,19 +427,16 @@ def delete_message(msg_id):
         
         conn = get_db()
         
-        # 检查消息是否存在
         msg = conn.execute('SELECT id, username, content, room FROM messages WHERE id = ?', (msg_id,)).fetchone()
         
         if not msg:
             conn.close()
             return jsonify({'error': '消息不存在'}), 404
         
-        # 删除消息
         conn.execute('DELETE FROM messages WHERE id = ?', (msg_id,))
         conn.commit()
         conn.close()
         
-        # 广播删除通知
         socketio.emit('system_message', {'content': f'🗑️ 管理员删除了 "{msg["username"]}" 的消息'})
         socketio.emit('message_deleted', {'id': msg_id, 'room': msg["room"]})
         
