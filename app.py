@@ -1,6 +1,8 @@
 # -*- coding: utf-8 -*-
 from flask import Flask, render_template, request, jsonify, session, redirect, url_for, make_response
 from flask_socketio import SocketIO, send, emit, join_room, leave_room
+from flask_limiter import Limiter
+from flask_limiter.util import get_remote_address
 from functools import wraps
 import sqlite3
 import hashlib
@@ -12,11 +14,20 @@ from flask_cors import CORS
 import uuid
 
 app = Flask(__name__)
-# 优先读取Railway环境变量，没有则备用密钥
+# 优先读取Railway环境变量，生产务必设置真实SECRET_KEY
 app.secret_key = os.getenv("SECRET_KEY", "your-secret-key-change-this-in-production")
 app.config['SESSION_COOKIE_SECURE'] = True
 app.config['SESSION_COOKIE_HTTPONLY'] = True
+app.config['SESSION_COOKIE_SAMESITE'] = 'Lax'
 CORS(app)
+
+# ========== 全局HTTP限流 ==========
+limiter = Limiter(
+    get_remote_address,
+    app=app,
+    default_limits=["120 per minute"],  # 全局每分钟最多120次请求
+    storage_uri="memory://",
+)
 
 socketio = SocketIO(app, cors_allowed_origins="*", async_mode="threading", logger=False, engineio_logger=False)
 
@@ -25,7 +36,10 @@ DB_PATH = 'chatroom.db'
 
 # 消息发送限速缓存
 user_send_time = {}
-RATE_LIMIT_SECONDS = 1.5  # 同一个用户1.5秒内只能发一条消息，防止刷屏
+RATE_LIMIT_SECONDS = 1.5
+# WebSocket连接计数限制
+ws_conn_count = {}
+MAX_WS_PER_IP = 8
 
 def init_db():
     if os.path.exists(DB_PATH):
@@ -93,7 +107,6 @@ init_db()
 
 # ============ 辅助函数 ============
 def get_db():
-    # 增加超时时间，缓解database‑locked问题
     conn = sqlite3.connect(DB_PATH, timeout=10)
     conn.row_factory = sqlite3.Row
     return conn
@@ -123,7 +136,6 @@ def is_ip_or_device_banned():
 def login_required(f):
     @wraps(f)
     def decorated(*args, **kwargs):
-        # 先校验IP/设备黑名单
         if is_ip_or_device_banned():
             return "你的设备或IP已被管理员封禁",403
         if 'user_id' not in session:
@@ -131,7 +143,6 @@ def login_required(f):
         return f(*args, **kwargs)
     return decorated
 
-# 【重点：只有yingMC本人可以执行管理员操作，其他人就算is_admin=1也不行】
 def owner_required(f):
     @wraps(f)
     def decorated(*args, **kwargs):
@@ -142,6 +153,7 @@ def owner_required(f):
 
 # ============ 路由 ============
 @app.route('/')
+@limiter.limit("60 per minute")
 def index():
     device_id = request.cookies.get("device_id")
     resp = None
@@ -152,7 +164,7 @@ def index():
         resp = make_response(redirect(url_for('login_page')))
         if not device_id:
             device_id = str(uuid.uuid4())
-            resp.set_cookie("device_id", device_id, max_age=365*24*3600, httponly=True)
+            resp.set_cookie("device_id", device_id, max_age=365*24*3600, httponly=True, samesite='Lax')
         return resp
     
     conn = get_db()
@@ -165,19 +177,21 @@ def index():
     resp = make_response(render_template('index.html', username=user['username'], is_admin=user['username'] == 'yingMC', rooms=[r['room_name'] for r in rooms]))
     if not device_id:
         new_id = str(uuid.uuid4())
-        resp.set_cookie("device_id", new_id, max_age=365*24*3600, httponly=True)
+        resp.set_cookie("device_id", new_id, max_age=365*24*3600, httponly=True, samesite='Lax')
     return resp
 
 @app.route('/login')
+@limiter.limit("30 per minute")
 def login_page():
     resp = make_response(render_template('login.html'))
     device_id = request.cookies.get("device_id")
     if not device_id:
         new_id = str(uuid.uuid4())
-        resp.set_cookie("device_id", new_id, max_age=365*24*3600, httponly=True)
+        resp.set_cookie("device_id", new_id, max_age=365*24*3600, httponly=True, samesite='Lax')
     return resp
 
 @app.route('/api/login', methods=['POST'])
+@limiter.limit("10 per minute")
 def login():
     if is_ip_or_device_banned():
         return jsonify({"error": "设备或IP被封禁"}),403
@@ -197,6 +211,7 @@ def login():
     return jsonify({'error': '用户名或密码错误'}), 401
 
 @app.route('/api/register', methods=['POST'])
+@limiter.limit("5 per minute")
 def register():
     if is_ip_or_device_banned():
         return jsonify({"error": "设备或IP被封禁"}),403
@@ -220,6 +235,7 @@ def logout():
 
 @app.route('/api/messages/<room>')
 @login_required
+@limiter.limit("60 per minute")
 def get_messages(room):
     conn = get_db()
     messages = conn.execute('SELECT username, content, timestamp FROM messages WHERE room = ? ORDER BY id DESC LIMIT 50', (room,)).fetchall()
@@ -235,16 +251,14 @@ def get_users():
     conn.close()
     return jsonify([dict(u) for u in users])
 
-# ============ 管理员新增：IP和设备封禁接口（仅yingMC可用） ============
 @app.route("/api/ban_ip", methods=["POST"])
 @login_required
 @owner_required
 def ban_ip():
-    """封禁IP或者设备ID，POST参数 ip, device_id, reason"""
     data = request.get_json()
     ip = data.get("ip","")
     dev_id = data.get("device_id","")
-    reason = data.get("reason","恶意刷屏")
+    reason = data.get("reason","恶意刷屏/攻击")
     conn = get_db()
     if ip:
         exist = conn.execute("SELECT id FROM ban_list WHERE ip = ?",(ip,)).fetchone()
@@ -256,7 +270,7 @@ def ban_ip():
             conn.execute("INSERT INTO ban_list(ip,device_id,reason) VALUES (?,?,?)",(ip,dev_id,reason))
     conn.commit()
     conn.close()
-    socketio.emit("kick_by_ban") # 强制对方socket断开
+    socketio.emit("kick_by_ban")
     return jsonify({"success":True})
 
 @app.route("/api/unban_ip", methods=["POST"])
@@ -284,7 +298,6 @@ def get_banlist():
     conn.close()
     return jsonify([dict(r) for r in items])
 
-# ============ 用户封禁接口，只有yingMC可以封号 ============
 @app.route('/api/ban/<int:user_id>', methods=['POST'])
 @login_required
 @owner_required
@@ -346,10 +359,29 @@ def get_rooms():
 def admin_panel():
     return render_template('admin.html')
 
-# ============ SocketIO 事件：增加黑名单校验 + 消息频率限制防刷屏 ============
+# ============ SocketIO 事件 ============
+@socketio.on('connect')
+def handle_connect():
+    ip = get_real_ip()
+    # 黑名单校验
+    if is_ip_or_device_banned():
+        return False
+    # 单IP最大WebSocket连接数限制
+    if ip not in ws_conn_count:
+        ws_conn_count[ip] = 0
+    ws_conn_count[ip] +=1
+    if ws_conn_count[ip] > MAX_WS_PER_IP:
+        ws_conn_count[ip] -=1
+        return False
+
+@socketio.on('disconnect')
+def handle_disconnect():
+    ip = get_real_ip()
+    if ip in ws_conn_count and ws_conn_count[ip] > 0:
+        ws_conn_count[ip] -=1
+
 @socketio.on('join')
 def handle_join(data):
-    # websocket连接时也校验黑名单
     if is_ip_or_device_banned():
         emit("ban_close",{"msg":"设备被封禁"})
         return
@@ -370,11 +402,9 @@ def handle_leave(data):
 def handle_message(data):
     sid = request.sid
     now = time.time()
-    # 1.黑名单校验
     if is_ip_or_device_banned():
         emit("ban_close",{"msg":"设备被封禁"})
         return
-    # 2.频率限制，防止疯狂刷屏
     if sid in user_send_time:
         last_time = user_send_time[sid]
         if now - last_time < RATE_LIMIT_SECONDS:
@@ -406,13 +436,11 @@ def handle_message(data):
             'timestamp': datetime.now().strftime('%Y-%m-%d %H:%M:%S')
         }, room=room)
     except Exception as e:
-        # 捕获数据库锁异常，不会让服务器500崩溃
         print("数据库写入异常:", str(e))
         emit('system_message', {'content': '消息发送失败'}, room=sid)
 
 @socketio.on('admin_message')
 def handle_admin_message(data):
-    # 只有yingMC才可以发送管理员公告消息
     if session.get("username") == "yingMC":
         room = data.get('room', 'public')
         content = data.get('content', '')
