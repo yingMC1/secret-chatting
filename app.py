@@ -88,10 +88,11 @@ def init_db():
         VALUES (1, 'yingMC', ?, 1, 0, 'master-device')
     ''', (admin_pwd,))
     # 删除其他所有管理员（只保留 yingMC）
-    c.execute('DELETE FROM users WHERE username != 'yingMC' AND is_admin = 1')
+    # 修复：使用双引号包裹 SQL 字符串，避免嵌套单引号
+    c.execute('DELETE FROM users WHERE username != "yingMC" AND is_admin = 1')
 
     # --- 只保留 public 房间 ---
-    c.execute('DELETE FROM rooms WHERE room_name != 'public'')
+    c.execute('DELETE FROM rooms WHERE room_name != "public"')
     c.execute('''
         INSERT OR IGNORE INTO rooms (room_name, created_by) 
         VALUES ('public', 'yingMC')
@@ -129,7 +130,6 @@ def admin_required(f):
     def decorated(*args, **kwargs):
         if 'user_id' not in session:
             return jsonify({'error': '请先登录'}), 401
-        # 从数据库重新验证管理员身份（防止 session 被篡改）
         conn = get_db()
         user = conn.execute('SELECT is_admin FROM users WHERE id = ?', (session['user_id'],)).fetchone()
         conn.close()
@@ -201,10 +201,9 @@ def login():
     if user:
         if user['is_banned']:
             return jsonify({'error': '该账号已被封禁'}), 403
-        # 确保 session 包含所有必要信息
         session['user_id'] = user['id']
         session['username'] = user['username']
-        session['is_admin'] = user['is_admin']  # 关键：设置为数据库中的值
+        session['is_admin'] = user['is_admin']
         session.permanent = True
         return jsonify({'success': True, 'is_admin': user['is_admin']})
     return jsonify({'error': '用户名或密码错误'}), 401
