@@ -8,7 +8,6 @@ from datetime import datetime
 import os
 import logging
 
-# 启用详细日志
 logging.basicConfig(level=logging.INFO)
 
 app = Flask(__name__)
@@ -21,18 +20,18 @@ app.config.update(
     PERMANENT_SESSION_LIFETIME=86400
 )
 
-# SocketIO 配置：增加 ping 超时和重连
 socketio = SocketIO(app, cors_allowed_origins="*", async_mode='threading',
                     ping_timeout=60, ping_interval=25)
 
 DB_PATH = 'chatroom.db'
-online_users = {}  # {sid: username}
+online_users = {}
 
 
 def init_db():
     conn = sqlite3.connect(DB_PATH)
     c = conn.cursor()
 
+    # --- 用户表（基础字段） ---
     c.execute('''
         CREATE TABLE IF NOT EXISTS users (
             id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -40,11 +39,18 @@ def init_db():
             password TEXT NOT NULL,
             is_admin INTEGER DEFAULT 0,
             is_banned INTEGER DEFAULT 0,
-            device_id TEXT,
             created_at TEXT DEFAULT CURRENT_TIMESTAMP
         )
     ''')
 
+    # --- 安全添加 device_id 列 ---
+    c.execute("PRAGMA table_info(users)")
+    columns = [col[1] for col in c.fetchall()]
+    if 'device_id' not in columns:
+        c.execute('ALTER TABLE users ADD COLUMN device_id TEXT')
+        logging.info("已添加 device_id 列到 users 表")
+
+    # --- 消息表 ---
     c.execute('''
         CREATE TABLE IF NOT EXISTS messages (
             id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -55,6 +61,7 @@ def init_db():
         )
     ''')
 
+    # --- 房间表 ---
     c.execute('''
         CREATE TABLE IF NOT EXISTS rooms (
             id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -64,6 +71,7 @@ def init_db():
         )
     ''')
 
+    # --- 被封禁设备表 ---
     c.execute('''
         CREATE TABLE IF NOT EXISTS banned_devices (
             id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -72,21 +80,26 @@ def init_db():
         )
     ''')
 
+    # --- 初始化 yingMC ---
     admin_pwd = hashlib.sha256('ying@akioi&1101'.encode()).hexdigest()
+    # 使用 INSERT OR IGNORE 避免重复插入时因 device_id 冲突
     c.execute('''
-        INSERT OR REPLACE INTO users (username, password, is_admin, is_banned, device_id) 
+        INSERT OR IGNORE INTO users (username, password, is_admin, is_banned, device_id) 
         VALUES (?, ?, 1, 0, ?)
     ''', ('yingMC', admin_pwd, 'master-device'))
-
+    # 确保 yingMC 是唯一管理员
     c.execute('DELETE FROM users WHERE username != ? AND is_admin = 1', ('yingMC',))
+
+    # --- 只保留 public 房间 ---
     c.execute('DELETE FROM rooms WHERE room_name != ?', ('public',))
     c.execute('''
-        INSERT OR REPLACE INTO rooms (room_name, created_by) 
+        INSERT OR IGNORE INTO rooms (room_name, created_by) 
         VALUES (?, ?)
     ''', ('public', 'yingMC'))
 
     conn.commit()
     conn.close()
+    logging.info("数据库初始化/迁移完成")
 
 
 init_db()
@@ -456,7 +469,6 @@ def handle_connect():
     online_users[sid] = username
     app.logger.info(f'✅ {username} 已连接 (sid: {sid})，当前在线: {len(online_users)}')
     update_online_count()
-    # 立即给该客户端发送一次当前人数
     emit('online_count', {'count': len(online_users)})
 
 
@@ -477,7 +489,6 @@ def handle_join(data):
     join_room(room)
     emit('system_message', {'content': f'{username} 加入了房间'}, room=room)
     emit('room_joined', {'room': room})
-    # 发送当前在线人数
     emit('online_count', {'count': len(online_users)})
 
 
