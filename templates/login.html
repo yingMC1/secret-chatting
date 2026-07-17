@@ -3,233 +3,363 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>登录 - 聊天室</title>
+    <title>💬 登录 · 聊天室</title>
     <style>
-        * { margin: 0; padding: 0; box-sizing: border-box; }
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
         body {
-            font-family: 'Segoe UI', sans-serif;
-            background: #1a1a2e;
-            min-height: 100vh;
+            font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+            background: #0e1219;
+            height: 100vh;
             display: flex;
             justify-content: center;
             align-items: center;
-            color: #eee;
+            padding: 16px;
         }
-        .container {
-            background: #16213e;
-            padding: 40px;
-            border-radius: 16px;
+        .auth-container {
+            background: #181f2b;
+            border-radius: 32px;
+            padding: 40px 36px;
+            max-width: 420px;
             width: 100%;
-            max-width: 400px;
-            box-shadow: 0 8px 32px rgba(0,0,0,0.4);
+            box-shadow: 0 25px 60px rgba(0, 0, 0, 0.7);
+            border: 1px solid rgba(255, 255, 255, 0.04);
         }
-        .container h1 {
+        .auth-header {
             text-align: center;
-            color: #e94560;
-            margin-bottom: 8px;
+            margin-bottom: 32px;
+        }
+        .auth-header h1 {
+            color: #f0f4fa;
             font-size: 28px;
+            font-weight: 600;
+            letter-spacing: -0.5px;
         }
-        .container .subtitle {
-            text-align: center;
-            color: #888;
+        .auth-header h1 span {
+            color: #5b8cbf;
+        }
+        .auth-header p {
+            color: #8aa1bc;
             font-size: 14px;
+            margin-top: 6px;
+        }
+        .auth-tabs {
+            display: flex;
+            gap: 8px;
+            background: #1f2a3a;
+            border-radius: 30px;
+            padding: 4px;
             margin-bottom: 28px;
         }
-        .form-group {
+        .auth-tabs button {
+            flex: 1;
+            padding: 10px 0;
+            border: none;
+            border-radius: 30px;
+            background: transparent;
+            color: #8aa1bc;
+            font-size: 15px;
+            font-weight: 500;
+            cursor: pointer;
+            transition: all 0.2s;
+        }
+        .auth-tabs button.active {
+            background: #2b6f9c;
+            color: #fff;
+            box-shadow: 0 4px 12px rgba(43, 111, 156, 0.3);
+        }
+        .auth-tabs button:hover:not(.active) {
+            color: #d6e3f0;
+        }
+        .auth-form {
+            display: block;
+        }
+        .auth-form.hidden {
+            display: none;
+        }
+        .auth-form .form-group {
             margin-bottom: 18px;
         }
-        .form-group label {
+        .auth-form label {
             display: block;
-            font-size: 14px;
-            color: #aaa;
-            margin-bottom: 4px;
+            color: #b0c8e0;
+            font-size: 13px;
+            font-weight: 500;
+            margin-bottom: 6px;
         }
-        .form-group input {
+        .auth-form input {
             width: 100%;
-            padding: 10px 14px;
+            padding: 12px 16px;
             border: none;
-            border-radius: 8px;
-            background: #1a2a4a;
-            color: #eee;
+            border-radius: 30px;
+            background: #1f2a3a;
+            color: #e5edf5;
             font-size: 15px;
             outline: none;
-            transition: 0.3s;
+            transition: background 0.2s, box-shadow 0.2s;
         }
-        .form-group input:focus {
-            background: #0f3460;
-            box-shadow: 0 0 0 2px #e94560;
+        .auth-form input:focus {
+            background: #283649;
+            box-shadow: 0 0 0 2px #3b6a94;
         }
-        .form-group input::placeholder { color: #6688aa; }
-        .btn {
+        .auth-form input::placeholder {
+            color: #5e748e;
+        }
+        .auth-form .btn-primary {
             width: 100%;
             padding: 12px;
             border: none;
-            border-radius: 8px;
-            background: #e94560;
+            border-radius: 30px;
+            background: #2b6f9c;
             color: #fff;
             font-size: 16px;
+            font-weight: 600;
             cursor: pointer;
-            transition: 0.3s;
-            font-weight: bold;
+            transition: background 0.2s, transform 0.1s;
+            margin-top: 6px;
         }
-        .btn:hover { background: #c73652; }
-        .btn:disabled { opacity: 0.6; cursor: not-allowed; }
-        .toggle-mode {
+        .auth-form .btn-primary:hover {
+            background: #3b86b8;
+        }
+        .auth-form .btn-primary:active {
+            transform: scale(0.97);
+        }
+        .auth-form .error-msg {
+            color: #ff6b6b;
+            font-size: 13px;
+            margin-top: 10px;
             text-align: center;
-            margin-top: 16px;
-            font-size: 14px;
-            color: #888;
+            min-height: 20px;
         }
-        .toggle-mode a {
-            color: #66aaff;
+        .auth-footer {
+            text-align: center;
+            margin-top: 20px;
+            color: #4d657f;
+            font-size: 13px;
+        }
+        .auth-footer a {
+            color: #5b8cbf;
             text-decoration: none;
-            cursor: pointer;
+            font-weight: 500;
         }
-        .toggle-mode a:hover { text-decoration: underline; }
-        .error-msg {
-            background: #cc3344;
-            padding: 10px 14px;
-            border-radius: 8px;
-            font-size: 14px;
-            margin-bottom: 16px;
-            display: none;
+        .auth-footer a:hover {
+            text-decoration: underline;
         }
-        .error-msg.show { display: block; }
-        .success-msg {
-            background: #0f8a5a;
-            padding: 10px 14px;
-            border-radius: 8px;
-            font-size: 14px;
-            margin-bottom: 16px;
-            display: none;
-        }
-        .success-msg.show { display: block; }
-        .default-hint {
+        .default-admin {
+            margin-top: 18px;
+            padding: 14px;
+            background: #1f2a3a;
+            border-radius: 16px;
             text-align: center;
-            font-size: 12px;
-            color: #555;
-            margin-top: 12px;
-            border-top: 1px solid #1a2a4a;
-            padding-top: 12px;
+            color: #8aa1bc;
+            font-size: 13px;
+            border: 1px dashed #2a3648;
         }
-        .default-hint code {
-            background: #1a2a4a;
-            padding: 2px 8px;
-            border-radius: 4px;
-            color: #66aaff;
+        .default-admin strong {
+            color: #b07cd8;
+        }
+        @media (max-width: 480px) {
+            .auth-container {
+                padding: 28px 20px;
+            }
         }
     </style>
 </head>
 <body>
-    <div class="container">
-        <h1>💬 聊天室</h1>
-        <div class="subtitle" id="modeTitle">登录账号</div>
-        
-        <div class="error-msg" id="errorMsg"></div>
-        <div class="success-msg" id="successMsg"></div>
-
-        <form id="authForm" onsubmit="handleSubmit(event)">
-            <div class="form-group">
-                <label for="username">用户名</label>
-                <input type="text" id="username" placeholder="请输入用户名" required autocomplete="username">
-            </div>
-            <div class="form-group">
-                <label for="password">密码</label>
-                <input type="password" id="password" placeholder="请输入密码" required autocomplete="current-password">
-            </div>
-            <button type="submit" class="btn" id="submitBtn">登录</button>
-        </form>
-
-        <div class="toggle-mode">
-            <span id="toggleText">还没有账号？</span>
-            <a id="toggleLink" onclick="toggleMode()">注册新账号</a>
+    <div class="auth-container">
+        <div class="auth-header">
+            <h1>💬 <span>聊天室</span></h1>
+            <p>登录 或 注册 开始聊天</p>
         </div>
 
-        <div class="default-hint">
-            👤 默认管理员：<code>yingMC</code>
+        <!-- Tab 切换 -->
+        <div class="auth-tabs">
+            <button id="tabLogin" class="active" onclick="switchTab('login')">登录</button>
+            <button id="tabRegister" onclick="switchTab('register')">注册</button>
+        </div>
+
+        <!-- 登录表单 -->
+        <div id="loginForm" class="auth-form">
+            <div class="form-group">
+                <label>用户名</label>
+                <input type="text" id="loginUsername" placeholder="输入用户名" autofocus>
+            </div>
+            <div class="form-group">
+                <label>密码</label>
+                <input type="password" id="loginPassword" placeholder="输入密码">
+            </div>
+            <button class="btn-primary" onclick="login()">登 录</button>
+            <div id="loginError" class="error-msg"></div>
+        </div>
+
+        <!-- 注册表单 -->
+        <div id="registerForm" class="auth-form hidden">
+            <div class="form-group">
+                <label>用户名</label>
+                <input type="text" id="regUsername" placeholder="设置用户名">
+            </div>
+            <div class="form-group">
+                <label>密码</label>
+                <input type="password" id="regPassword" placeholder="设置密码">
+            </div>
+            <button class="btn-primary" onclick="register()">注 册</button>
+            <div id="regError" class="error-msg"></div>
+        </div>
+
+        <!-- 默认管理员信息 -->
+        <div class="default-admin">
+            👤 默认管理员：<strong>yingMC</strong> &nbsp;|&nbsp; 密码：<strong>ying@akioi&1101</strong>
+        </div>
+
+        <div class="auth-footer">
+            使用即表示您同意遵守社区规范
         </div>
     </div>
 
     <script>
-        let isLoginMode = true;
-
-        function toggleMode() {
-            isLoginMode = !isLoginMode;
-            const title = document.getElementById('modeTitle');
-            const btn = document.getElementById('submitBtn');
-            const toggleText = document.getElementById('toggleText');
-            const toggleLink = document.getElementById('toggleLink');
-            
-            if (isLoginMode) {
-                title.textContent = '登录账号';
-                btn.textContent = '登录';
-                toggleText.textContent = '还没有账号？';
-                toggleLink.textContent = '注册新账号';
-            } else {
-                title.textContent = '注册新账号';
-                btn.textContent = '注册';
-                toggleText.textContent = '已有账号？';
-                toggleLink.textContent = '去登录';
+        // ===== 设备 ID 管理 =====
+        function getDeviceId() {
+            let id = localStorage.getItem('deviceId');
+            if (!id) {
+                id = crypto.randomUUID ? crypto.randomUUID() : 'xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx'.replace(/[xy]/g, function(c) {
+                    var r = Math.random() * 16 | 0,
+                        v = c == 'x' ? r : (r & 0x3 | 0x8);
+                    return v.toString(16);
+                });
+                localStorage.setItem('deviceId', id);
             }
-            document.getElementById('errorMsg').classList.remove('show');
-            document.getElementById('successMsg').classList.remove('show');
+            return id;
         }
 
-        async function handleSubmit(e) {
-            e.preventDefault();
-            const username = document.getElementById('username').value.trim();
-            const password = document.getElementById('password').value;
-            const errorMsg = document.getElementById('errorMsg');
-            const successMsg = document.getElementById('successMsg');
-            const btn = document.getElementById('submitBtn');
+        // ===== Tab 切换 =====
+        function switchTab(tab) {
+            const loginForm = document.getElementById('loginForm');
+            const registerForm = document.getElementById('registerForm');
+            const tabLogin = document.getElementById('tabLogin');
+            const tabRegister = document.getElementById('tabRegister');
 
-            errorMsg.classList.remove('show');
-            successMsg.classList.remove('show');
+            if (tab === 'login') {
+                loginForm.classList.remove('hidden');
+                registerForm.classList.add('hidden');
+                tabLogin.classList.add('active');
+                tabRegister.classList.remove('active');
+                document.getElementById('loginError').textContent = '';
+            } else {
+                loginForm.classList.add('hidden');
+                registerForm.classList.remove('hidden');
+                tabRegister.classList.add('active');
+                tabLogin.classList.remove('active');
+                document.getElementById('regError').textContent = '';
+            }
+        }
+
+        // ===== 登录 =====
+        function login() {
+            const username = document.getElementById('loginUsername').value.trim();
+            const password = document.getElementById('loginPassword').value;
+            const errorEl = document.getElementById('loginError');
 
             if (!username || !password) {
-                errorMsg.textContent = '请填写用户名和密码';
-                errorMsg.classList.add('show');
+                errorEl.textContent = '请填写用户名和密码';
                 return;
             }
 
-            btn.disabled = true;
-            btn.textContent = '处理中...';
+            errorEl.textContent = '登录中...';
 
-            try {
-                const endpoint = isLoginMode ? '/api/login' : '/api/register';
-                const res = await fetch(endpoint, {
-                    method: 'POST',
-                    headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({ username, password })
-                });
-                const data = await res.json();
-
-                if (res.ok) {
-                    if (isLoginMode) {
-                        successMsg.textContent = '✅ 登录成功，正在跳转...';
-                        successMsg.classList.add('show');
-                        setTimeout(() => {
-                            window.location.href = '/';
-                        }, 500);
-                    } else {
-                        successMsg.textContent = '✅ 注册成功，请登录';
-                        successMsg.classList.add('show');
-                        if (!isLoginMode) toggleMode();
-                        document.getElementById('username').value = '';
-                        document.getElementById('password').value = '';
-                    }
+            fetch('/api/login', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ username, password })
+            })
+            .then(res => res.json())
+            .then(data => {
+                if (data.success) {
+                    window.location.href = '/';
                 } else {
-                    errorMsg.textContent = data.error || '操作失败，请重试';
-                    errorMsg.classList.add('show');
+                    errorEl.textContent = data.error || '登录失败，请重试';
                 }
-            } catch (err) {
-                errorMsg.textContent = '网络错误，请检查连接';
-                errorMsg.classList.add('show');
-            } finally {
-                btn.disabled = false;
-                btn.textContent = isLoginMode ? '登录' : '注册';
-            }
+            })
+            .catch(err => {
+                errorEl.textContent = '网络错误，请稍后重试';
+            });
         }
+
+        // ===== 注册 =====
+        function register() {
+            const username = document.getElementById('regUsername').value.trim();
+            const password = document.getElementById('regPassword').value;
+            const errorEl = document.getElementById('regError');
+
+            if (!username || !password) {
+                errorEl.textContent = '请填写用户名和密码';
+                return;
+            }
+            if (username.length < 2) {
+                errorEl.textContent = '用户名至少2个字符';
+                return;
+            }
+            if (password.length < 4) {
+                errorEl.textContent = '密码至少4个字符';
+                return;
+            }
+
+            const device_id = getDeviceId();
+
+            errorEl.textContent = '注册中...';
+
+            fetch('/api/register', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ username, password, device_id })
+            })
+            .then(res => res.json())
+            .then(data => {
+                if (data.success) {
+                    errorEl.textContent = '✅ 注册成功！请切换到登录';
+                    errorEl.style.color = '#7fd1b0';
+                    document.getElementById('regUsername').value = '';
+                    document.getElementById('regPassword').value = '';
+                    // 自动切换到登录
+                    setTimeout(() => {
+                        switchTab('login');
+                        document.getElementById('loginUsername').value = username;
+                        document.getElementById('loginPassword').focus();
+                        errorEl.style.color = '#ff6b6b';
+                    }, 1200);
+                } else {
+                    errorEl.textContent = data.error || '注册失败，请重试';
+                    errorEl.style.color = '#ff6b6b';
+                }
+            })
+            .catch(err => {
+                errorEl.textContent = '网络错误，请稍后重试';
+                errorEl.style.color = '#ff6b6b';
+            });
+        }
+
+        // ===== 按回车触发登录/注册 =====
+        document.addEventListener('keydown', function(e) {
+            if (e.key === 'Enter') {
+                const activeForm = document.querySelector('.auth-form:not(.hidden)');
+                if (activeForm) {
+                    if (activeForm.id === 'loginForm') {
+                        login();
+                    } else if (activeForm.id === 'registerForm') {
+                        register();
+                    }
+                }
+            }
+        });
+
+        // 小提示：点击默认管理员信息可快速填充登录框（方便测试）
+        document.querySelector('.default-admin')?.addEventListener('click', function() {
+            document.getElementById('loginUsername').value = 'yingMC';
+            document.getElementById('loginPassword').value = 'ying@akioi&1101';
+            switchTab('login');
+        });
     </script>
 </body>
 </html>
