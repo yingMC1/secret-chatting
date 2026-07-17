@@ -31,7 +31,7 @@ def init_db():
     conn = sqlite3.connect(DB_PATH)
     c = conn.cursor()
 
-    # --- 用户表（基础字段） ---
+    # --- 用户表 ---
     c.execute('''
         CREATE TABLE IF NOT EXISTS users (
             id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -43,12 +43,12 @@ def init_db():
         )
     ''')
 
-    # --- 安全添加 device_id 列 ---
+    # 安全添加 device_id 列
     c.execute("PRAGMA table_info(users)")
     columns = [col[1] for col in c.fetchall()]
     if 'device_id' not in columns:
         c.execute('ALTER TABLE users ADD COLUMN device_id TEXT')
-        logging.info("已添加 device_id 列到 users 表")
+        logging.info("已添加 device_id 列")
 
     # --- 消息表 ---
     c.execute('''
@@ -80,22 +80,22 @@ def init_db():
         )
     ''')
 
-    # --- 初始化 yingMC ---
+    # --- 初始化/修复 yingMC 管理员 ---
     admin_pwd = hashlib.sha256('ying@akioi&1101'.encode()).hexdigest()
-    # 使用 INSERT OR IGNORE 避免重复插入时因 device_id 冲突
+    # 使用 REPLACE 确保 yingMC 始终是管理员
     c.execute('''
-        INSERT OR IGNORE INTO users (username, password, is_admin, is_banned, device_id) 
-        VALUES (?, ?, 1, 0, ?)
-    ''', ('yingMC', admin_pwd, 'master-device'))
-    # 确保 yingMC 是唯一管理员
-    c.execute('DELETE FROM users WHERE username != ? AND is_admin = 1', ('yingMC',))
+        INSERT OR REPLACE INTO users (id, username, password, is_admin, is_banned, device_id) 
+        VALUES (1, 'yingMC', ?, 1, 0, 'master-device')
+    ''', (admin_pwd,))
+    # 删除其他所有管理员（只保留 yingMC）
+    c.execute('DELETE FROM users WHERE username != 'yingMC' AND is_admin = 1')
 
     # --- 只保留 public 房间 ---
-    c.execute('DELETE FROM rooms WHERE room_name != ?', ('public',))
+    c.execute('DELETE FROM rooms WHERE room_name != 'public'')
     c.execute('''
         INSERT OR IGNORE INTO rooms (room_name, created_by) 
-        VALUES (?, ?)
-    ''', ('public', 'yingMC'))
+        VALUES ('public', 'yingMC')
+    ''')
 
     conn.commit()
     conn.close()
@@ -129,6 +129,7 @@ def admin_required(f):
     def decorated(*args, **kwargs):
         if 'user_id' not in session:
             return jsonify({'error': '请先登录'}), 401
+        # 从数据库重新验证管理员身份（防止 session 被篡改）
         conn = get_db()
         user = conn.execute('SELECT is_admin FROM users WHERE id = ?', (session['user_id'],)).fetchone()
         conn.close()
@@ -200,9 +201,10 @@ def login():
     if user:
         if user['is_banned']:
             return jsonify({'error': '该账号已被封禁'}), 403
+        # 确保 session 包含所有必要信息
         session['user_id'] = user['id']
         session['username'] = user['username']
-        session['is_admin'] = user['is_admin']
+        session['is_admin'] = user['is_admin']  # 关键：设置为数据库中的值
         session.permanent = True
         return jsonify({'success': True, 'is_admin': user['is_admin']})
     return jsonify({'error': '用户名或密码错误'}), 401
@@ -304,7 +306,7 @@ def get_online_count():
     return jsonify({'count': len(online_users)})
 
 
-# ===== 封禁用户（同时封禁设备）=====
+# ===== 封禁用户 =====
 @app.route('/api/ban/<int:user_id>', methods=['POST'])
 @admin_required
 def ban_user(user_id):
@@ -417,7 +419,7 @@ def delete_user(user_id):
     return jsonify({'success': True, 'username': user['username']})
 
 
-# ===== 删除消息：yingMC 可删自己的，其他管理员不能删 yingMC 的 =====
+# ===== 删除消息 =====
 @app.route('/api/delete_message/<int:msg_id>', methods=['DELETE'])
 @login_required
 def delete_message(msg_id):
@@ -444,6 +446,7 @@ def delete_message(msg_id):
     return jsonify({'error': '无权删除此消息'}), 403
 
 
+# ===== 管理面板 =====
 @app.route('/admin')
 @admin_required
 def admin_panel():
@@ -455,7 +458,7 @@ def health():
     return 'OK', 200
 
 
-# ========== SocketIO 事件 ==========
+# ========== SocketIO ==========
 def update_online_count():
     count = len(online_users)
     socketio.emit('online_count', {'count': count}, room='public')
