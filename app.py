@@ -1,15 +1,17 @@
 # -*- coding: utf-8 -*-
-from flask import Flask, render_template, request, jsonify, session, redirect, url_for, make_response
+from flask import Flask, render_template, request, jsonify, session, redirect, url_for
 from flask_socketio import SocketIO, emit, join_room, leave_room
 from functools import wraps
 import sqlite3
 import hashlib
-from datetime import datetime, timedelta
+from datetime import datetime
 import os
-import uuid
+import logging
+
+# 启用详细日志
+logging.basicConfig(level=logging.INFO)
 
 app = Flask(__name__)
-
 app.secret_key = os.environ.get('SECRET_KEY', 'yingmc-chatroom-secret-key-2026')
 
 app.config.update(
@@ -19,17 +21,18 @@ app.config.update(
     PERMANENT_SESSION_LIFETIME=86400
 )
 
-socketio = SocketIO(app, cors_allowed_origins="*", async_mode='threading')
+# SocketIO 配置：增加 ping 超时和重连
+socketio = SocketIO(app, cors_allowed_origins="*", async_mode='threading',
+                    ping_timeout=60, ping_interval=25)
 
 DB_PATH = 'chatroom.db'
-online_users = {}
+online_users = {}  # {sid: username}
 
 
 def init_db():
     conn = sqlite3.connect(DB_PATH)
     c = conn.cursor()
 
-    # --- 用户表（基础字段） ---
     c.execute('''
         CREATE TABLE IF NOT EXISTS users (
             id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -37,16 +40,11 @@ def init_db():
             password TEXT NOT NULL,
             is_admin INTEGER DEFAULT 0,
             is_banned INTEGER DEFAULT 0,
+            device_id TEXT,
             created_at TEXT DEFAULT CURRENT_TIMESTAMP
         )
     ''')
-    # 安全添加 device_id 列（如果不存在）
-    try:
-        c.execute('ALTER TABLE users ADD COLUMN device_id TEXT')
-    except sqlite3.OperationalError:
-        pass  # 列已存在
 
-    # --- 消息表 ---
     c.execute('''
         CREATE TABLE IF NOT EXISTS messages (
             id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -57,7 +55,6 @@ def init_db():
         )
     ''')
 
-    # --- 房间表 ---
     c.execute('''
         CREATE TABLE IF NOT EXISTS rooms (
             id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -67,7 +64,6 @@ def init_db():
         )
     ''')
 
-    # --- 被封禁设备表 ---
     c.execute('''
         CREATE TABLE IF NOT EXISTS banned_devices (
             id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -76,16 +72,13 @@ def init_db():
         )
     ''')
 
-    # --- 初始化 yingMC ---
     admin_pwd = hashlib.sha256('ying@akioi&1101'.encode()).hexdigest()
     c.execute('''
         INSERT OR REPLACE INTO users (username, password, is_admin, is_banned, device_id) 
         VALUES (?, ?, 1, 0, ?)
     ''', ('yingMC', admin_pwd, 'master-device'))
 
-    # 只保留 yingMC 为管理员
     c.execute('DELETE FROM users WHERE username != ? AND is_admin = 1', ('yingMC',))
-    # 只保留 public 房间
     c.execute('DELETE FROM rooms WHERE room_name != ?', ('public',))
     c.execute('''
         INSERT OR REPLACE INTO rooms (room_name, created_by) 
@@ -132,7 +125,6 @@ def admin_required(f):
     return decorated
 
 
-# ===== 仅 yingMC 可执行的管理员操作（授予/撤销）=====
 def yingmc_only(f):
     @wraps(f)
     def decorated(*args, **kwargs):
@@ -148,7 +140,6 @@ def before_request():
         return redirect(request.url.replace('http://', 'https://'), 301)
 
 
-# ========== 路由 ==========
 @app.route('/')
 def index():
     if 'user_id' not in session:
@@ -218,7 +209,6 @@ def register():
         return jsonify({'error': '设备标识缺失，请启用Cookie'}), 400
 
     conn = get_db()
-    # 检查设备是否在黑名单
     banned = conn.execute('SELECT id FROM banned_devices WHERE device_id = ?', (device_id,)).fetchone()
     if banned:
         conn.close()
@@ -260,7 +250,6 @@ def get_messages(room):
     return jsonify([dict(m) for m in messages[::-1]])
 
 
-# ===== 获取管理员列表（用于前端显示紫色）=====
 @app.route('/api/admin_users')
 @login_required
 def get_admin_users():
@@ -302,7 +291,7 @@ def get_online_count():
     return jsonify({'count': len(online_users)})
 
 
-# ===== 封禁用户：同时封禁设备 =====
+# ===== 封禁用户（同时封禁设备）=====
 @app.route('/api/ban/<int:user_id>', methods=['POST'])
 @admin_required
 def ban_user(user_id):
@@ -321,9 +310,7 @@ def ban_user(user_id):
         conn.close()
         return jsonify({'error': '不能封禁管理员'}), 400
 
-    # 封禁账号
     conn.execute('UPDATE users SET is_banned = 1 WHERE id = ?', (user_id,))
-    # 将设备ID加入黑名单
     if user['device_id']:
         try:
             conn.execute('INSERT OR IGNORE INTO banned_devices (device_id) VALUES (?)', (user['device_id'],))
@@ -350,7 +337,7 @@ def unban_user(user_id):
     return jsonify({'success': True})
 
 
-# ===== 授予管理员权限：仅 yingMC 可操作 =====
+# ===== 授予/撤销管理员：仅 yingMC =====
 @app.route('/api/make_admin/<int:user_id>', methods=['POST'])
 @admin_required
 @yingmc_only
@@ -369,7 +356,6 @@ def make_admin(user_id):
     return jsonify({'success': True, 'username': user['username']})
 
 
-# ===== 撤销管理员权限：仅 yingMC 可操作 =====
 @app.route('/api/revoke_admin/<int:user_id>', methods=['POST'])
 @admin_required
 @yingmc_only
@@ -431,13 +417,9 @@ def delete_message(msg_id):
     user = conn.execute('SELECT username, is_admin FROM users WHERE id = ?', (session['user_id'],)).fetchone()
     conn.close()
 
-    # 如果是 yingMC 的消息
-    if msg['username'] == 'yingMC':
-        # 只有 yingMC 本人可以删除自己的消息
-        if user['username'] != 'yingMC':
-            return jsonify({'error': '❌ 不能删除所有者 yingMC 的消息'}), 400
+    if msg['username'] == 'yingMC' and user['username'] != 'yingMC':
+        return jsonify({'error': '❌ 不能删除所有者 yingMC 的消息'}), 400
 
-    # 权限检查：管理员 或 消息作者本人
     if user['is_admin'] or user['username'] == msg['username']:
         conn = get_db()
         conn.execute('DELETE FROM messages WHERE id = ?', (msg_id,))
@@ -447,9 +429,6 @@ def delete_message(msg_id):
         return jsonify({'success': True})
 
     return jsonify({'error': '无权删除此消息'}), 403
-
-
-# ===== 清空消息功能已移除 =====
 
 
 @app.route('/admin')
@@ -463,22 +442,29 @@ def health():
     return 'OK', 200
 
 
+# ========== SocketIO 事件 ==========
 def update_online_count():
     count = len(online_users)
     socketio.emit('online_count', {'count': count}, room='public')
+    app.logger.info(f'在线人数更新: {count}')
 
 
 @socketio.on('connect')
 def handle_connect():
     username = session.get('username', '匿名')
-    session['_sid'] = request.sid
-    online_users[request.sid] = username
+    sid = request.sid
+    online_users[sid] = username
+    app.logger.info(f'✅ {username} 已连接 (sid: {sid})，当前在线: {len(online_users)}')
     update_online_count()
+    # 立即给该客户端发送一次当前人数
+    emit('online_count', {'count': len(online_users)})
 
 
 @socketio.on('disconnect')
 def handle_disconnect():
-    username = online_users.pop(request.sid, '匿名')
+    sid = request.sid
+    username = online_users.pop(sid, '匿名')
+    app.logger.info(f'❌ {username} 已断开 (sid: {sid})，当前在线: {len(online_users)}')
     update_online_count()
 
 
@@ -491,7 +477,8 @@ def handle_join(data):
     join_room(room)
     emit('system_message', {'content': f'{username} 加入了房间'}, room=room)
     emit('room_joined', {'room': room})
-    emit('online_count', {'count': len(online_users)}, room=request.sid)
+    # 发送当前在线人数
+    emit('online_count', {'count': len(online_users)})
 
 
 @socketio.on('leave')
