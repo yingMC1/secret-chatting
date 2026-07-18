@@ -23,13 +23,18 @@ app.config.update(
 socketio = SocketIO(app, cors_allowed_origins="*", async_mode='threading',
                     ping_timeout=60, ping_interval=25)
 
-# ========== 关键修改：数据库路径指向 Volume 挂载点 ==========
 DB_PATH = os.environ.get('DB_PATH', '/app/data/chatroom.db')
 online_users = {}
 
 
 def init_db():
-    # 如果数据库文件已存在且有消息表，则跳过初始化，防止覆盖已有数据
+    # 确保数据库目录存在
+    db_dir = os.path.dirname(DB_PATH)
+    if db_dir and not os.path.exists(db_dir):
+        os.makedirs(db_dir, exist_ok=True)
+        logging.info(f"创建数据库目录: {db_dir}")
+
+    # 如果数据库文件已存在且有消息表，则跳过初始化
     if os.path.exists(DB_PATH):
         try:
             conn = sqlite3.connect(DB_PATH)
@@ -43,7 +48,7 @@ def init_db():
         except Exception as e:
             logging.warning(f"检查数据库时出错: {e}")
 
-    # 否则创建新表（不会删除已有数据）
+    # 否则创建新表
     conn = sqlite3.connect(DB_PATH)
     c = conn.cursor()
 
@@ -57,8 +62,6 @@ def init_db():
             created_at TEXT DEFAULT CURRENT_TIMESTAMP
         )
     ''')
-
-    # 安全添加 device_id 列（如果不存在）
     c.execute("PRAGMA table_info(users)")
     columns = [col[1] for col in c.fetchall()]
     if 'device_id' not in columns:
@@ -74,7 +77,6 @@ def init_db():
             timestamp TEXT DEFAULT CURRENT_TIMESTAMP
         )
     ''')
-
     c.execute('''
         CREATE TABLE IF NOT EXISTS rooms (
             id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -83,7 +85,6 @@ def init_db():
             created_at TEXT DEFAULT CURRENT_TIMESTAMP
         )
     ''')
-
     c.execute('''
         CREATE TABLE IF NOT EXISTS banned_devices (
             id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -91,28 +92,22 @@ def init_db():
             banned_at TEXT DEFAULT CURRENT_TIMESTAMP
         )
     ''')
-
-    # 初始化 yingMC 管理员
     admin_pwd = hashlib.sha256('ying@akioi&1101'.encode()).hexdigest()
     c.execute('''
         INSERT OR REPLACE INTO users (id, username, password, is_admin, is_banned, device_id) 
         VALUES (1, 'yingMC', ?, 1, 0, 'master-device')
     ''', (admin_pwd,))
-    # 只保留 yingMC 为管理员
     c.execute('DELETE FROM users WHERE username != "yingMC" AND is_admin = 1')
-    # 只保留 public 房间
     c.execute('DELETE FROM rooms WHERE room_name != "public"')
     c.execute('''
         INSERT OR IGNORE INTO rooms (room_name, created_by) 
         VALUES ('public', 'yingMC')
     ''')
-
     conn.commit()
     conn.close()
     logging.info("数据库初始化完成")
 
 
-# 执行初始化（如果数据库已存在且有表，会直接返回）
 init_db()
 
 
@@ -272,7 +267,6 @@ def get_messages(room):
     ''', (room,)).fetchall()
     conn.close()
 
-    # 将时间转换为 ISO 格式（UTC），供前端本地化显示
     result = []
     for m in messages:
         msg = dict(m)
@@ -544,7 +538,6 @@ def handle_message(data):
     conn.commit()
     conn.close()
 
-    # 发送 ISO 格式时间
     utc_now = datetime.utcnow().isoformat() + 'Z'
     emit('new_message', {
         'id': msg_id,
