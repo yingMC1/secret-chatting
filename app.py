@@ -23,6 +23,7 @@ app.config.update(
 socketio = SocketIO(app, cors_allowed_origins="*", async_mode='threading',
                     ping_timeout=60, ping_interval=25)
 
+# 数据库路径 - 必须指向 Volume 挂载点
 DB_PATH = os.environ.get('DB_PATH', '/app/data/chatroom.db')
 online_users = {}
 
@@ -34,21 +35,31 @@ def init_db():
         os.makedirs(db_dir, exist_ok=True)
         logging.info(f"创建数据库目录: {db_dir}")
 
-    # 如果数据库文件已存在且有消息表，则跳过初始化
-    if os.path.exists(DB_PATH):
+    # 检查数据库文件是否存在
+    db_exists = os.path.exists(DB_PATH)
+    logging.info(f"数据库路径: {DB_PATH}, 文件存在: {db_exists}")
+
+    if db_exists:
         try:
             conn = sqlite3.connect(DB_PATH)
             c = conn.cursor()
+            # 检查 messages 表是否存在
             c.execute("SELECT count(*) FROM sqlite_master WHERE type='table' AND name='messages'")
             if c.fetchone()[0] > 0:
+                # 检查是否有消息
+                c.execute("SELECT count(*) FROM messages")
+                msg_count = c.fetchone()[0]
                 conn.close()
-                logging.info("数据库已存在且包含消息表，跳过初始化")
+                logging.info(f"数据库已存在，包含 messages 表，当前消息数: {msg_count}，跳过初始化")
                 return
+            else:
+                logging.info("数据库文件存在但无 messages 表，将创建表结构")
             conn.close()
         except Exception as e:
-            logging.warning(f"检查数据库时出错: {e}")
+            logging.warning(f"检查数据库时出错: {e}，将尝试重建")
 
-    # 否则创建新表
+    # 如果走到这里，说明数据库不存在或缺少表结构，需要创建
+    logging.info("正在创建数据库表结构...")
     conn = sqlite3.connect(DB_PATH)
     c = conn.cursor()
 
@@ -266,6 +277,8 @@ def get_messages(room):
         WHERE room = ? ORDER BY id DESC LIMIT 100
     ''', (room,)).fetchall()
     conn.close()
+
+    logging.info(f"获取消息: 房间 {room}, 共 {len(messages)} 条")
 
     result = []
     for m in messages:
@@ -537,6 +550,7 @@ def handle_message(data):
     msg_id = cursor.lastrowid
     conn.commit()
     conn.close()
+    logging.info(f"新消息插入: id={msg_id}, user={username}, room={room}")
 
     utc_now = datetime.utcnow().isoformat() + 'Z'
     emit('new_message', {
