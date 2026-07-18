@@ -23,15 +23,30 @@ app.config.update(
 socketio = SocketIO(app, cors_allowed_origins="*", async_mode='threading',
                     ping_timeout=60, ping_interval=25)
 
-DB_PATH = 'chatroom.db'
+# ========== 关键修改：数据库路径指向 Volume 挂载点 ==========
+DB_PATH = os.environ.get('DB_PATH', '/app/data/chatroom.db')
 online_users = {}
 
 
 def init_db():
+    # 如果数据库文件已存在且有消息表，则跳过初始化，防止覆盖已有数据
+    if os.path.exists(DB_PATH):
+        try:
+            conn = sqlite3.connect(DB_PATH)
+            c = conn.cursor()
+            c.execute("SELECT count(*) FROM sqlite_master WHERE type='table' AND name='messages'")
+            if c.fetchone()[0] > 0:
+                conn.close()
+                logging.info("数据库已存在且包含消息表，跳过初始化")
+                return
+            conn.close()
+        except Exception as e:
+            logging.warning(f"检查数据库时出错: {e}")
+
+    # 否则创建新表（不会删除已有数据）
     conn = sqlite3.connect(DB_PATH)
     c = conn.cursor()
 
-    # --- 用户表 ---
     c.execute('''
         CREATE TABLE IF NOT EXISTS users (
             id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -43,14 +58,13 @@ def init_db():
         )
     ''')
 
-    # 安全添加 device_id 列
+    # 安全添加 device_id 列（如果不存在）
     c.execute("PRAGMA table_info(users)")
     columns = [col[1] for col in c.fetchall()]
     if 'device_id' not in columns:
         c.execute('ALTER TABLE users ADD COLUMN device_id TEXT')
         logging.info("已添加 device_id 列")
 
-    # --- 消息表 ---
     c.execute('''
         CREATE TABLE IF NOT EXISTS messages (
             id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -61,7 +75,6 @@ def init_db():
         )
     ''')
 
-    # --- 房间表 ---
     c.execute('''
         CREATE TABLE IF NOT EXISTS rooms (
             id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -71,7 +84,6 @@ def init_db():
         )
     ''')
 
-    # --- 被封禁设备表 ---
     c.execute('''
         CREATE TABLE IF NOT EXISTS banned_devices (
             id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -80,18 +92,15 @@ def init_db():
         )
     ''')
 
-    # --- 初始化/修复 yingMC 管理员 ---
+    # 初始化 yingMC 管理员
     admin_pwd = hashlib.sha256('ying@akioi&1101'.encode()).hexdigest()
-    # 使用 REPLACE 确保 yingMC 始终是管理员
     c.execute('''
         INSERT OR REPLACE INTO users (id, username, password, is_admin, is_banned, device_id) 
         VALUES (1, 'yingMC', ?, 1, 0, 'master-device')
     ''', (admin_pwd,))
-    # 删除其他所有管理员（只保留 yingMC）
-    # 修复：使用双引号包裹 SQL 字符串，避免嵌套单引号
+    # 只保留 yingMC 为管理员
     c.execute('DELETE FROM users WHERE username != "yingMC" AND is_admin = 1')
-
-    # --- 只保留 public 房间 ---
+    # 只保留 public 房间
     c.execute('DELETE FROM rooms WHERE room_name != "public"')
     c.execute('''
         INSERT OR IGNORE INTO rooms (room_name, created_by) 
@@ -100,9 +109,10 @@ def init_db():
 
     conn.commit()
     conn.close()
-    logging.info("数据库初始化/迁移完成")
+    logging.info("数据库初始化完成")
 
 
+# 执行初始化（如果数据库已存在且有表，会直接返回）
 init_db()
 
 
@@ -261,7 +271,19 @@ def get_messages(room):
         WHERE room = ? ORDER BY id DESC LIMIT 100
     ''', (room,)).fetchall()
     conn.close()
-    return jsonify([dict(m) for m in messages[::-1]])
+
+    # 将时间转换为 ISO 格式（UTC），供前端本地化显示
+    result = []
+    for m in messages:
+        msg = dict(m)
+        if msg['timestamp']:
+            try:
+                dt = datetime.strptime(msg['timestamp'], '%Y-%m-%d %H:%M:%S')
+                msg['timestamp'] = dt.isoformat() + 'Z'
+            except:
+                pass
+        result.append(msg)
+    return jsonify(result)
 
 
 @app.route('/api/admin_users')
@@ -305,7 +327,6 @@ def get_online_count():
     return jsonify({'count': len(online_users)})
 
 
-# ===== 封禁用户 =====
 @app.route('/api/ban/<int:user_id>', methods=['POST'])
 @admin_required
 def ban_user(user_id):
@@ -351,7 +372,6 @@ def unban_user(user_id):
     return jsonify({'success': True})
 
 
-# ===== 授予/撤销管理员：仅 yingMC =====
 @app.route('/api/make_admin/<int:user_id>', methods=['POST'])
 @admin_required
 @yingmc_only
@@ -418,7 +438,6 @@ def delete_user(user_id):
     return jsonify({'success': True, 'username': user['username']})
 
 
-# ===== 删除消息 =====
 @app.route('/api/delete_message/<int:msg_id>', methods=['DELETE'])
 @login_required
 def delete_message(msg_id):
@@ -445,7 +464,6 @@ def delete_message(msg_id):
     return jsonify({'error': '无权删除此消息'}), 403
 
 
-# ===== 管理面板 =====
 @app.route('/admin')
 @admin_required
 def admin_panel():
@@ -457,7 +475,6 @@ def health():
     return 'OK', 200
 
 
-# ========== SocketIO ==========
 def update_online_count():
     count = len(online_users)
     socketio.emit('online_count', {'count': count}, room='public')
@@ -527,11 +544,13 @@ def handle_message(data):
     conn.commit()
     conn.close()
 
+    # 发送 ISO 格式时间
+    utc_now = datetime.utcnow().isoformat() + 'Z'
     emit('new_message', {
         'id': msg_id,
         'username': username,
         'content': content,
-        'timestamp': datetime.now().strftime('%Y-%m-%d %H:%M:%S')
+        'timestamp': utc_now
     }, room=room)
 
 
