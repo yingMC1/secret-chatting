@@ -148,19 +148,7 @@
         .auth-footer a:hover {
             text-decoration: underline;
         }
-        .default-admin {
-            margin-top: 18px;
-            padding: 14px;
-            background: #1f2a3a;
-            border-radius: 16px;
-            text-align: center;
-            color: #8aa1bc;
-            font-size: 13px;
-            border: 1px dashed #2a3648;
-        }
-        .default-admin strong {
-            color: #b07cd8;
-        }
+        /* 移除了 default-admin 区域，不再显示任何密码 */
         @media (max-width: 480px) {
             .auth-container {
                 padding: 28px 20px;
@@ -207,11 +195,6 @@
             </div>
             <button class="btn-primary" onclick="register()">注 册</button>
             <div id="regError" class="error-msg"></div>
-        </div>
-
-        <!-- 默认管理员信息 -->
-        <div class="default-admin">
-            👤 默认管理员：<strong>yingMC</strong> &nbsp;|&nbsp; 密码：<strong>ying@akioi&1101</strong>
         </div>
 
         <div class="auth-footer">
@@ -352,13 +335,6 @@
                     }
                 }
             }
-        });
-
-        // 小提示：点击默认管理员信息可快速填充登录框（方便测试）
-        document.querySelector('.default-admin')?.addEventListener('click', function() {
-            document.getElementById('loginUsername').value = 'yingMC';
-            document.getElementById('loginPassword').value = 'ying@akioi&1101';
-            switchTab('login');
         });
     </script>
 </body>
