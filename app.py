@@ -570,4 +570,5 @@ def handle_admin_message(data):
 
 
 if __name__ == '__main__':
-    socketio.run(app, host='0.0.0.0', port=5000, debug=False, async_mode='threading')
+    port = int(os.environ.get('PORT', 8080))
+    socketio.run(app, host='0.0.0.0', port=port, debug=False, async_mode='threading')
