@@ -6,17 +6,21 @@ import hashlib
 app = Flask(__name__)
 app.secret_key = "super_secret_chat_key_2026"
 
+# 只在这里声明，init_db内部不再使用这个全局变量
 BASE_DIR = os.path.dirname(os.path.abspath(__file__))
 db_dir = os.path.join(BASE_DIR, "data")
 db_path = os.path.join(db_dir, "chat.db")
 
 
 def init_db():
-    # 函数内重新计算路径，防止全局变量求值异常跑到 /app
-    base = os.path.dirname(os.path.abspath(__file__))
+    # 完全本地计算路径，绝不读取外部全局变量
+    file_path = __file__
+    base = os.path.dirname(os.path.abspath(file_path))
     local_db_dir = os.path.join(base, "data")
     os.makedirs(local_db_dir, exist_ok=True)
-    conn = sqlite3.connect(os.path.join(local_db_dir, "chat.db"))
+    real_db = os.path.join(local_db_dir, "chat.db")
+
+    conn = sqlite3.connect(real_db)
     c = conn.cursor()
 
     c.execute('''CREATE TABLE IF NOT EXISTS users (
@@ -33,7 +37,6 @@ def init_db():
         created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
     )''')
 
-    # 默认管理员账号 admin / admin123
     c.execute("SELECT * FROM users WHERE username = ?", ("admin",))
     if not c.fetchone():
         raw_pwd = "admin123"
@@ -54,7 +57,6 @@ def before_req():
     if first_run:
         init_db()
         first_run = False
-
     g.user = None
     if "username" in session:
         g.user = session["username"]
@@ -139,7 +141,6 @@ def admin_panel():
         db.close()
         flash("无管理员权限")
         return redirect(url_for("index"))
-
     users = db.execute("SELECT id,username,is_admin FROM users").fetchall()
     msgs = db.execute("SELECT * FROM messages ORDER BY created_at DESC").fetchall()
     db.close()
