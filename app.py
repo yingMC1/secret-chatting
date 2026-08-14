@@ -23,8 +23,11 @@ app.config.update(
 socketio = SocketIO(app, cors_allowed_origins="*", async_mode='threading',
                     ping_timeout=60, ping_interval=25)
 
-# 数据库路径 - 必须指向 Volume 挂载点
-DB_PATH = os.environ.get('DB_PATH', '/app/data/chatroom.db')
+# ==========已修复数据库路径，不再使用 /app 根目录==========
+BASE_DIR = os.path.dirname(os.path.abspath(__file__))
+DEFAULT_DB = os.path.join(BASE_DIR, "data", "chatroom.db")
+DB_PATH = os.environ.get('DB_PATH', DEFAULT_DB)
+
 online_users = {}
 
 
