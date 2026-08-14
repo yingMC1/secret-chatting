@@ -6,19 +6,15 @@ import hashlib
 app = Flask(__name__)
 app.secret_key = "super_secret_chat_key_2026"
 
-# 只在这里声明，init_db内部不再使用这个全局变量
-BASE_DIR = os.path.dirname(os.path.abspath(__file__))
-db_dir = os.path.join(BASE_DIR, "data")
-db_path = os.path.join(db_dir, "chat.db")
+# 全部写死PythonAnywhere绝对路径，不在顶层做__file__计算
+PROJECT_ROOT = "/home/yingMC/secret-chatting"
+DATA_FOLDER = os.path.join(PROJECT_ROOT, "data")
+DB_FILE = os.path.join(DATA_FOLDER, "chat.db")
 
 
 def init_db():
-    # PythonAnywhere写死绝对路径，彻底避开__file__求值bug
-    local_db_dir = "/home/yingMC/secret-chatting/data"
-    os.makedirs(local_db_dir, exist_ok=True)
-    real_db = os.path.join(local_db_dir, "chat.db")
-
-    conn = sqlite3.connect(real_db)
+    os.makedirs(DATA_FOLDER, exist_ok=True)
+    conn = sqlite3.connect(DB_FILE)
     c = conn.cursor()
 
     c.execute('''CREATE TABLE IF NOT EXISTS users (
@@ -46,7 +42,6 @@ def init_db():
     conn.close()
 
 
-
 first_run = True
 
 
@@ -62,7 +57,8 @@ def before_req():
 
 
 def get_db():
-    db = sqlite3.connect(db_path)
+    # 直接使用硬编码DB_FILE，不再使用之前坏掉的全局db_path
+    db = sqlite3.connect(DB_FILE)
     db.row_factory = sqlite3.Row
     return db
 
