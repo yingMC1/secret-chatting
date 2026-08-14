@@ -13,10 +13,8 @@ db_path = os.path.join(db_dir, "chat.db")
 
 
 def init_db():
-    # 完全本地计算路径，绝不读取外部全局变量
-    file_path = __file__
-    base = os.path.dirname(os.path.abspath(file_path))
-    local_db_dir = os.path.join(base, "data")
+    # PythonAnywhere写死绝对路径，彻底避开__file__求值bug
+    local_db_dir = "/home/yingMC/secret-chatting/data"
     os.makedirs(local_db_dir, exist_ok=True)
     real_db = os.path.join(local_db_dir, "chat.db")
 
@@ -46,6 +44,7 @@ def init_db():
 
     conn.commit()
     conn.close()
+
 
 
 first_run = True
