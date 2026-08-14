@@ -6,7 +6,7 @@ import hashlib
 app = Flask(__name__)
 app.secret_key = "super_secret_chat_key_2026"
 
-# ========== 数据库路径：项目目录下的data文件夹，不要写 /app ==========
+# 数据库路径：基于app.py所在目录，不会访问系统 /app 目录
 BASE_DIR = os.path.dirname(os.path.abspath(__file__))
 db_dir = os.path.join(BASE_DIR, "data")
 db_path = os.path.join(db_dir, "chat.db")
@@ -43,7 +43,6 @@ def init_db():
     conn.close()
 
 
-# 标记：第一次网页请求才初始化数据库，wsgi导入阶段不执行IO
 first_run = True
 
 
@@ -158,7 +157,7 @@ def del_msg(mid):
     return redirect(url_for("admin"))
 
 
+# ⚠️只有本地直接运行python app.py才会执行，WSGI导入不会进入这里
 if __name__ == "__main__":
-    # 本地调试用，pythonanywhere wsgi不会走到这里
     init_db()
     app.run(debug=False)
