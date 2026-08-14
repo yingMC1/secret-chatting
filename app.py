@@ -57,7 +57,6 @@ def before_req():
 
 
 def get_db():
-    # 直接使用硬编码DB_FILE，不再使用之前坏掉的全局db_path
     db = sqlite3.connect(DB_FILE)
     db.row_factory = sqlite3.Row
     return db
@@ -73,38 +72,53 @@ def index():
     return render_template("index.html", user=g.user, messages=msgs)
 
 
-@app.route("/login", methods=["GET", "POST"])
+@app.route("/login", methods=["GET"])
 def login():
-    if request.method == "POST":
-        un = request.form["username"]
-        pw = hashlib.sha256(request.form["password"].encode("utf8")).hexdigest()
-        db = get_db()
-        row = db.execute("SELECT * FROM users WHERE username=? AND password=?", (un, pw)).fetchone()
-        db.close()
-        if row:
-            session["username"] = un
-            return redirect(url_for("index"))
-        flash("账号密码错误")
     return render_template("login.html")
 
 
-@app.route("/register", methods=["GET", "POST"])
-def register():
-    if request.method == "POST":
+# 前端JS调用的登录API /api/login
+@app.route("/api/login", methods=["POST"])
+def api_login():
+    if request.is_json:
+        data = request.get_json()
+        un = data["username"]
+        pw = hashlib.sha256(data["password"].encode("utf8")).hexdigest()
+    else:
+        un = request.form["username"]
+        pw = hashlib.sha256(request.form["password"].encode("utf8")).hexdigest()
+
+    db = get_db()
+    row = db.execute("SELECT * FROM users WHERE username=? AND password=?", (un, pw)).fetchone()
+    db.close()
+    if row:
+        session["username"] = un
+        return {"ok": True, "msg": "登录成功"}
+    else:
+        return {"ok": False, "msg": "账号密码错误"}
+
+
+# 前端JS调用的注册API /api/register
+@app.route("/api/register", methods=["POST"])
+def api_register():
+    if request.is_json:
+        data = request.get_json()
+        un = data["username"]
+        pw_raw = data["password"]
+    else:
         un = request.form["username"]
         pw_raw = request.form["password"]
-        pw_hash = hashlib.sha256(pw_raw.encode("utf8")).hexdigest()
-        db = get_db()
-        try:
-            db.execute("INSERT INTO users(username,password) VALUES (?,?)", (un, pw_hash))
-            db.commit()
-            flash("注册成功，请登录")
-            return redirect(url_for("login"))
-        except sqlite3.IntegrityError:
-            flash("用户名已存在")
-        finally:
-            db.close()
-    return render_template("register.html")
+
+    pw_hash = hashlib.sha256(pw_raw.encode("utf8")).hexdigest()
+    db = get_db()
+    try:
+        db.execute("INSERT INTO users(username,password) VALUES (?,?)", (un, pw_hash))
+        db.commit()
+        return {"ok": True, "msg": "注册成功，请登录"}
+    except sqlite3.IntegrityError:
+        return {"ok": False, "msg": "用户名已存在"}
+    finally:
+        db.close()
 
 
 @app.route("/logout")
