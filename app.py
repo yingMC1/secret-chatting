@@ -6,15 +6,17 @@ import hashlib
 app = Flask(__name__)
 app.secret_key = "super_secret_chat_key_2026"
 
-# 数据库路径：基于app.py所在目录，不会访问系统 /app 目录
 BASE_DIR = os.path.dirname(os.path.abspath(__file__))
 db_dir = os.path.join(BASE_DIR, "data")
 db_path = os.path.join(db_dir, "chat.db")
 
 
 def init_db():
-    os.makedirs(db_dir, exist_ok=True)
-    conn = sqlite3.connect(db_path)
+    # 函数内重新计算路径，防止全局变量求值异常跑到 /app
+    base = os.path.dirname(os.path.abspath(__file__))
+    local_db_dir = os.path.join(base, "data")
+    os.makedirs(local_db_dir, exist_ok=True)
+    conn = sqlite3.connect(os.path.join(local_db_dir, "chat.db"))
     c = conn.cursor()
 
     c.execute('''CREATE TABLE IF NOT EXISTS users (
@@ -157,7 +159,6 @@ def del_msg(mid):
     return redirect(url_for("admin"))
 
 
-# ⚠️只有本地直接运行python app.py才会执行，WSGI导入不会进入这里
 if __name__ == "__main__":
     init_db()
     app.run(debug=False)
