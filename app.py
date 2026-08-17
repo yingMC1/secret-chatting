@@ -2,14 +2,17 @@ from flask import Flask, render_template, request, redirect, url_for, session, f
 import sqlite3
 import os
 import hashlib
+import json
 
 app = Flask(__name__)
 app.secret_key = "super_secret_chat_key_2026"
 
-# 全部写死PythonAnywhere绝对路径，不在顶层做__file__计算
+# 全部写死PythonAnywhere绝对路径
 PROJECT_ROOT = "/home/yingMC/secret-chatting"
-DATA_FOLDER = os.path.join(PROJECT_ROOT, "data")
-DB_FILE = os.path.join(DATA_FOLDER, "chat.db")
+# 服务器实际文件夹名是【数据】
+DATA_FOLDER = os.path.join(PROJECT_ROOT, "数据")
+# 使用服务器真实数据库 chatroom.db
+DB_FILE = os.path.join(PROJECT_ROOT, "chatroom.db")
 
 
 def init_db():
@@ -62,6 +65,7 @@ def get_db():
     return db
 
 
+# ========== 原有表单路由（保留不动） ==========
 @app.route("/")
 def index():
     if g.user is None:
@@ -72,53 +76,38 @@ def index():
     return render_template("index.html", user=g.user, messages=msgs)
 
 
-@app.route("/login", methods=["GET"])
+@app.route("/login", methods=["GET", "POST"])
 def login():
+    if request.method == "POST":
+        un = request.form["username"]
+        pw = hashlib.sha256(request.form["password"].encode("utf8")).hexdigest()
+        db = get_db()
+        row = db.execute("SELECT * FROM users WHERE username=? AND password=?", (un, pw)).fetchone()
+        db.close()
+        if row:
+            session["username"] = un
+            return redirect(url_for("index"))
+        flash("账号密码错误")
     return render_template("login.html")
 
 
-# 前端JS调用的登录API /api/login
-@app.route("/api/login", methods=["POST"])
-def api_login():
-    if request.is_json:
-        data = request.get_json()
-        un = data["username"]
-        pw = hashlib.sha256(data["password"].encode("utf8")).hexdigest()
-    else:
-        un = request.form["username"]
-        pw = hashlib.sha256(request.form["password"].encode("utf8")).hexdigest()
-
-    db = get_db()
-    row = db.execute("SELECT * FROM users WHERE username=? AND password=?", (un, pw)).fetchone()
-    db.close()
-    if row:
-        session["username"] = un
-        return {"ok": True, "msg": "登录成功"}
-    else:
-        return {"ok": False, "msg": "账号密码错误"}
-
-
-# 前端JS调用的注册API /api/register
-@app.route("/api/register", methods=["POST"])
-def api_register():
-    if request.is_json:
-        data = request.get_json()
-        un = data["username"]
-        pw_raw = data["password"]
-    else:
+@app.route("/register", methods=["GET", "POST"])
+def register():
+    if request.method == "POST":
         un = request.form["username"]
         pw_raw = request.form["password"]
-
-    pw_hash = hashlib.sha256(pw_raw.encode("utf8")).hexdigest()
-    db = get_db()
-    try:
-        db.execute("INSERT INTO users(username,password) VALUES (?,?)", (un, pw_hash))
-        db.commit()
-        return {"ok": True, "msg": "注册成功，请登录"}
-    except sqlite3.IntegrityError:
-        return {"ok": False, "msg": "用户名已存在"}
-    finally:
-        db.close()
+        pw_hash = hashlib.sha256(pw_raw.encode("utf8")).hexdigest()
+        db = get_db()
+        try:
+            db.execute("INSERT INTO users(username,password) VALUES (?,?)", (un, pw_hash))
+            db.commit()
+            flash("注册成功，请登录")
+            return redirect(url_for("login"))
+        except sqlite3.IntegrityError:
+            flash("用户名已存在")
+        finally:
+            db.close()
+    return render_template("register.html")
 
 
 @app.route("/logout")
@@ -167,6 +156,46 @@ def del_msg(mid):
         db.commit()
     db.close()
     return redirect(url_for("admin"))
+
+
+# ========== 新增API接口，给前端fetch调用 ==========
+@app.route("/api/register", methods=["POST"])
+def api_register():
+    data = request.get_json()
+    if not data:
+        return json.dumps({"ok": False, "msg": "参数错误"}), 400
+    un = data.get("username", "").strip()
+    pw_raw = data.get("password", "")
+    if not un or not pw_raw:
+        return json.dumps({"ok": False, "msg": "用户名密码不能为空"}), 400
+    pw_hash = hashlib.sha256(pw_raw.encode("utf8")).hexdigest()
+    db = get_db()
+    try:
+        db.execute("INSERT INTO users(username,password) VALUES (?,?)", (un, pw_hash))
+        db.commit()
+        return json.dumps({"ok": True, "msg": "注册成功"})
+    except sqlite3.IntegrityError:
+        return json.dumps({"ok": False, "msg": "用户名已存在"}), 400
+    finally:
+        db.close()
+
+
+@app.route("/api/login", methods=["POST"])
+def api_login():
+    data = request.get_json()
+    if not data:
+        return json.dumps({"ok": False, "msg": "参数错误"}), 400
+    un = data.get("username", "").strip()
+    pw_raw = data.get("password", "")
+    pw_hash = hashlib.sha256(pw_raw.encode("utf8")).hexdigest()
+    db = get_db()
+    row = db.execute("SELECT * FROM users WHERE username=? AND password=?", (un, pw_hash)).fetchone()
+    db.close()
+    if row:
+        session["username"] = un
+        return json.dumps({"ok": True, "msg": "登录成功"})
+    else:
+        return json.dumps({"ok": False, "msg": "账号密码错误"}), 400
 
 
 if __name__ == "__main__":
